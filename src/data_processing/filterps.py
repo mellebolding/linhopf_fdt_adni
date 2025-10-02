@@ -8,7 +8,6 @@
 import numpy as np
 from scipy import stats
 from enum import Enum
-from neuronumba.tools.filters import BandPassFilter
 from typing import Union
 
 class FiltPowSpetraVersion(Enum):
@@ -151,3 +150,26 @@ def filt_pow_spetra_multiple_subjects(
     
     else:
         raise ValueError("Unknown version parameter")
+    
+def calc_H_freq(
+        all_HC_fMRI: Union[np.ndarray, dict], 
+        tr: float, 
+        version: FiltPowSpetraVersion=FiltPowSpetraVersion.v2021
+    ):
+        """
+        Compute H freq for each node. 
+        
+        Parameters
+        ----------
+        all_HC_fMRI: The fMRI of the "health control" group. Can be given in a dictionaray format, 
+                     or in an array format (subject, time, node).
+                     NOTE: that the signals must already be filitered. 
+        tr: TR in milliseconds
+        version: Version of FiltPowSpectra to use
+
+        Returns
+        -------
+        The h frequencies for each node
+        """
+        f_diff = filt_pow_spetra_multiple_subjects(all_HC_fMRI, tr, version)
+        return f_diff 

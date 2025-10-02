@@ -73,12 +73,12 @@ import pandas as pd
 import scipy.integrate as integrate
 from scipy.linalg import solve_continuous_lyapunov
 from DataLoaders.baseDataLoader import DataLoader
-import ADNI_A
+import src.data_loaders.ADNI_A as ADNI_A
 from functions_boxplots_WN3_v0 import *
 from functions_violinplots_WN3_v0 import *
 from functions_violinplots_v2 import *
 from functions_FDT_numba_v9 import construct_matrix_A, Integrate_Langevin_ND_Optimized, closest_valid_M
-import filterps
+import src.data_processing.filterps as filterps
 import functions_boxplots_WN3_v0
 from typing import Union
 from numba import njit, prange, objmode

@@ -461,10 +461,10 @@ class LinearHopfModel:
         self.COVemp = None
         self.COVtauemp = None
         
-    def setup_optimization(self, optimizer_method='adam', loss_weights=None, **optimizer_kwargs):
+    def setup_optimization(self, optimizer_method='adam', loss_weights=None, **kwargs):
         """Setup optimizer and loss manager"""
         self.loss_manager = LossManager(loss_weights)
-        self.optimizer = Optimizer(optimizer_method, **optimizer_kwargs)
+        self.optimizer = Optimizer(optimizer_method, **kwargs)
         
     def fit(self, tsdata: np.ndarray):
         """
@@ -518,16 +518,18 @@ class LinearHopfModel:
                 # Early stopping
                 if error < best_error:
                     best_error = error
+                    best_losses = losses
                     best_params = (Ceff_current.copy(), sigma_current.copy(), a_current.copy())
-                    if self.params['verbose']: best_err = (error,corr_fc,corr_cov)
+                    if self.params['verbose']: best_err = (corr_fc,corr_cov)
                     no_improvement = 0
                 else:
                     no_improvement += 1
                     if no_improvement > self.params['patience']:
                         if self.params['verbose']:
-                            error, corr_fc, corr_cov = best_err
+                            corr_fc, corr_cov = best_err
                             print(f"Early stopping: no improvement for {self.params['patience']} checks")
-                            print(f"Error={error:.6f}, CorrFC={corr_fc:.3f}, CorrCOV={corr_cov:.3f}")
+                            print(f"error={error:.3f}, CorrFC={corr_fc:.3f}, CorrCOV={corr_cov:.3f}")
+                            print(f"losses: {best_losses}")
                         break
             
             # Compute gradients
@@ -560,8 +562,8 @@ class LinearHopfModel:
         
         # Final simulation
         self.FCsim, _, _, _ = self._hopf_int(self.Ceff, self.sigma, self.a)
-        results = best_params
-        if self.params['verbose']: results = (*best_params, *best_err)
+        results = (*best_params, best_error)
+        if self.params['verbose']: results = (*best_params, best_error, *best_err)
         
         return results
     

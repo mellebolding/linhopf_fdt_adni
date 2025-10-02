@@ -10,28 +10,19 @@ import numpy as np
 import os, csv
 from pathlib import Path
 import sys
-# Ensure repo root is on sys.path for module imports
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+#import DataLoaders.Parcellations.Glasser379 as Glasser379
+
+# Go to repo root (two levels up from this file: src/data_loaders/ADNI_A.py → src → repo_root)
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.insert(0, repo_root)
 
-# Import central paths from config
-from support_files.config import (
-    connectome_dir,
-    raw_data_dir,
-    produced_data_dir,
-)
+# Now go into Data (at repo root)
+data_dir = os.path.join(repo_root, 'data')
+adni_data_dir = os.path.join(data_dir, 'ADNI-A_DATA')
+connectome_dir = os.path.join(adni_data_dir, 'connectomes')
 
-from DataLoaders.baseDataLoader import DataLoader
-import DataLoaders.Parcellations.Glasser379 as Glasser379
+base_folder = connectome_dir
 
-# Make sure data folders exist
-Path(raw_data_dir).mkdir(parents=True, exist_ok=True)
-Path(produced_data_dir).mkdir(parents=True, exist_ok=True)
-
-# Set base folder for data processing
-base_folder = connectome_dir  # or use raw_data_dir if that makes more sense contextually
-
-# Print for debug (optional)
 if __name__ == '__main__':
     print("Using base folder:", base_folder)
 # ==========================================================================
@@ -221,7 +212,7 @@ dataSetLabels = ['HC', 'MCI', 'AD']
 # These methods are used for the sole purpose of homogenizing data loading across projects
 # ================================================================================================================
 # ================================================================================================================
-class ADNI_A(DataLoader):
+class ADNI_A:
     def __init__(self, use360=False, correcSCMatrix=True, normalizeBurden=True, cutTimeSeries=True):
         self.use360 = use360
         self.correcSCMatrix = correcSCMatrix
