@@ -278,7 +278,7 @@ class Optimizer:
         x0 = np.concatenate([Ceff.flatten(), sigma, a])
         
         # Run L-BFGS
-        result = minimize(objective, x0, method='L-BFGS-B', options={'maxiter': 10})
+        result = minimize(objective, x0, method='L-BFGS-B', options={'maxiter': 4})
         
         # Unpack results
         n = model.n_parcels
@@ -366,40 +366,48 @@ class Optimizer:
         """Differential Evolution step"""
         Ceff, sigma, a = params
         n = model.n_parcels
-        
+
         def objective(x):
             Ceff_test = x[:n*n].reshape(n, n)
             sigma_test = x[n*n:n*n+n]
             a_test = x[n*n+n:]
-            
+
             Ceff_test = model._apply_Ceff_constraints(Ceff_test)
             FCsim, COVsim, COVsimtotal, A = model._hopf_int(Ceff_test, sigma_test, a_test)
             COVtausim = model._compute_covtau(COVsimtotal, A, COVsim)
-            
+
             loss, _ = model.loss_manager.compute_loss(
                 model.FCemp, FCsim, model.COVtauemp, COVtausim
             )
             return loss
-        
+
         # Pack parameters
         x0 = np.concatenate([Ceff.flatten(), sigma, a])
-        
+
         # Define bounds
         bounds = []
-        bounds.extend([(0, 0.5)] * (n*n))  # Ceff bounds
-        bounds.extend([(0.01, 0.5)] * n)   # sigma bounds
-        bounds.extend([(-0.5, -0.001)] * n)  # a bounds
-        
-        # Run DE for a few iterations
-        result = differential_evolution(objective, bounds, maxiter=1, 
-                                      init=np.array([x0]), workers=1)
-        
-        # Unpack
+        bounds.extend([(0, 0.5)] * (n*n))       # Ceff bounds
+        bounds.extend([(0.01, 0.5)] * n)        # sigma bounds
+        bounds.extend([(-0.5, -0.001)] * n)     # a bounds
+
+        # Option 1: Let DE generate its own population (recommended)
+        result = differential_evolution(objective, bounds, maxiter=1, workers=1)
+
+        # --- Optional: initialize population around x0 (uncomment if needed) ---
+        # D = len(x0)
+        # S = max(10, 2*D)
+        # init_pop = np.tile(x0, (S, 1)) + 0.01*np.random.randn(S, D)
+        # for i, (low, high) in enumerate(bounds):
+        #     init_pop[:, i] = np.clip(init_pop[:, i], low, high)
+        # result = differential_evolution(objective, bounds, maxiter=1, init=init_pop, workers=1)
+
+        # Unpack results
         Ceff_new = result.x[:n*n].reshape(n, n)
         sigma_new = result.x[n*n:n*n+n]
         a_new = result.x[n*n+n:]
-        
+
         return Ceff_new, sigma_new, a_new
+
 
 # ==================== Main Linear Hopf Model ====================
 class LinearHopfModel:
@@ -512,9 +520,7 @@ class LinearHopfModel:
                     i, j = np.triu_indices_from(self.FCemp, k=1)
                     corr_fc = np.corrcoef(self.FCemp[i, j], FCsim[i, j])[0, 1]
                     corr_cov = np.corrcoef(self.COVtauemp[i, j], COVtausim[i, j])[0, 1]
-                    # print(f"Iter {iteration:4d}: Error={error:.6f}, "
-                    #       f"CorrFC={corr_fc:.3f}, CorrCOV={corr_cov:.3f}")
-                
+
                 # Early stopping
                 if error < best_error:
                     best_error = error
@@ -562,8 +568,7 @@ class LinearHopfModel:
         
         # Final simulation
         self.FCsim, _, _, _ = self._hopf_int(self.Ceff, self.sigma, self.a)
-        results = (*best_params, best_error)
-        if self.params['verbose']: results = (*best_params, best_error, *best_err)
+        results = (*best_params, best_losses)
         
         return results
     
@@ -703,3 +708,25 @@ class LinearHopfModel:
                 Ceff *= (self.params['max_C'] / max_abs)
 
         return Ceff
+
+
+def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
+    """Fit model for one subject"""
+    SC = data['SC'][:NPARCELLS, :NPARCELLS]
+    f_diff = data['f_diff'][:NPARCELLS]
+    ts_zsc = data['ts'] if ts_zsc is None else ts_zsc
+    hopf_params = params['hopfParamsAdam'].copy()
+    hopf_params['verbose'] = verbose
+
+    model = LinearHopfModel(
+        C=SC, f_diff=f_diff, sigma=sigma_ini, a=a_ini, **hopf_params
+    )
+    model.setup_optimization(optimizer_method='adam', **hopf_params)
+    Ceff, sigma, a, losses = model.fit(ts_zsc)
+    
+    return {
+        'Ceff': Ceff,
+        'sigma': sigma,
+        'a': a,
+        'losses': losses,
+    }

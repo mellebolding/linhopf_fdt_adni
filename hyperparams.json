@@ -1,0 +1,25 @@
+{
+    "hopfParamsAdam": {
+        "competitive_coupling": false,
+        "allow_negative": false,
+        "loss_weights": {
+            "mse_fc": 0.25,
+            "mse_covtau": 0.25,
+            "corr_fc": 0.25,
+            "corr_covtau": 0.25
+        },
+        "lr_Ceff": 1e-4,
+        "lr_sigma": 1e-4,
+        "lr_a": 5e-4,
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "epsilon": 1e-8,
+        "max_iter": 1000,
+        "iter_check": 50,
+        "patience": 5,
+        "maxC": 0.2,
+        "TR": 3,
+        "g": 1,
+        "tau": 1.0
+    }
+}

@@ -12,15 +12,7 @@ os.chdir(repo_root)
 sys.path.insert(0, repo_root)
 sys.path.insert(0, os.path.join(repo_root, 'support_files'))
 sys.path.insert(0, os.path.join(repo_root, 'DataLoaders'))
-results_dir = os.path.join(repo_root, 'Result_plots')
-Ceff_sigma_subfolder = os.path.join(results_dir, 'Ceff_sigma_results')
-FDT_values_subfolder = os.path.join(results_dir, 'FDT_values')
-FDT_parcel_subfolder = os.path.join(results_dir, 'FDT_parcel')
-FDT_subject_subfolder = os.path.join(results_dir, 'FDT_sub')
-Inorm1_group_subfolder = os.path.join(results_dir, 'Inorm1_group')
-Inorm2_group_subfolder = os.path.join(results_dir, 'Inorm2_group')
-Inorm1_sub_subfolder = os.path.join(results_dir, 'Inorm1_sub')
-Inorm2_sub_subfolder = os.path.join(results_dir, 'Inorm2_sub')
+
 import numpy as np
 from functions_FDT_numba_v9 import *
 from numba import njit, prange, objmode
@@ -32,6 +24,8 @@ import matplotlib.pyplot as plt
 from functions_violinplots_WN3_v0 import plot_violins_HC_MCI_AD
 import p_values as p_values  # Make sure this is working!
 import statannotations_permutation
+
+
 
 
 

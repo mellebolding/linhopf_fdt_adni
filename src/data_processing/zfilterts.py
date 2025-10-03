@@ -95,3 +95,16 @@ def zscore_time_series(data, mode='parcel', detrend=False):
 
     std[std == 0] = 1.0  # avoid division by zero
     return (data - mean) / std
+
+def prepare_timeseries(all_data, NPARCELLS):
+    """Prepare z-scored timeseries array"""
+    min_ntimes = min(d['MRI'].shape[0] for d in all_data)
+    n_subjects = len(all_data)
+    
+    ts_array = np.zeros((n_subjects, NPARCELLS, min_ntimes))
+    for idx, subj_data in enumerate(all_data):
+        ts_array[idx, :, :] = subj_data['MRI'][:min_ntimes, :NPARCELLS].T
+    
+    TSemp_zsc = zscore_time_series(
+        ts_array, mode='global', detrend=True)[:, :NPARCELLS, :]
+    return TSemp_zsc

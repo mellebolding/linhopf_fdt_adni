@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=EC_sigma_fit_v2         # Job name
-#SBATCH --output=EC_sigma_fit_v2.out       # Standard output log
-#SBATCH --error=EC_sigma_fit_v2.err        # Standard error log
+#SBATCH --job-name=compute_linhopf         # Job name
+#SBATCH --output=compute_linhopf.out       # Standard output log
+#SBATCH --error=compute_linhopf.err        # Standard error log
 #SBATCH --time=300:00:00                 # Time limit (hh:mm:ss)
 #SBATCH --ntasks=1                      # Number of tasks (processes)
 #SBATCH --cpus-per-task=1               # Number of CPU cores per task
@@ -15,7 +15,7 @@ export MPLCONFIGDIR=/tmp/mplconfig_$SLURM_JOB_ID
 mkdir -p $MPLCONFIGDIR
 
 # Go to your script directory (optional but clean)
-cd /home/cluster/melle/FDT_ADNI/python_scripts
+cd /home/cluster/melle/LINHOPF_FDT_ADNI
 
 # Run your Python script
-python EC_sigma_fit_v2.py
+python compute_linhopf.py
