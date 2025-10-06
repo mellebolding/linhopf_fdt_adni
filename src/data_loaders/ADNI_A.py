@@ -74,8 +74,8 @@ def getClassifications():
 # =====================================================================================
 def loadBurden(subject, modality, baseFolder, normalize=True):
     pet_path = os.path.dirname(baseFolder) + "/PET_loads/"+subject+"/PET_PVC_MG/" + modality
-    RH_pet = np.loadtxt(pet_path+"/"+"L."+modality+"_load_MSMAll.pscalar.txt")
-    LH_pet = np.loadtxt(pet_path+"/"+"R."+modality+"_load_MSMAll.pscalar.txt")
+    RH_pet = np.loadtxt(pet_path+"/"+"R."+modality+"_load_MSMAll.pscalar.txt")
+    LH_pet = np.loadtxt(pet_path+"/"+"L."+modality+"_load_MSMAll.pscalar.txt")
     subcort_pet = np.loadtxt(pet_path+"/"+modality+"_load.subcortical.txt")[-19:]
     all_pet = np.concatenate((LH_pet,RH_pet,subcort_pet))
     if normalize:
@@ -261,7 +261,7 @@ class ADNI_A:
     def get_classification(self):
         return classification
 
-    def get_subjectData(self, subjectID, printInfo=True):
+    def get_subjectData(self, subjectID, printInfo=False):
         # 1st, load
         SCnorm, abeta_burden, tau_burden, timeseries = loadSubjectData(subjectID,
                                                                        correcSCMatrix=self.correcSCMatrix,

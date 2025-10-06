@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import src.data_loaders.ADNI_A as ADNI_A
+import src.data_loaders.ADNI_B as ADNI_B
 import src.data_processing.zfilterts as zfilterts
 import src.data_loaders.load_data_records as load_data_records
 import src.functions_frameworks.LinHopfFit as LinHopfFit
@@ -12,6 +13,7 @@ from typing import Union
 start_time = time.time()
 
 ### MAIN INPUT PARAMETERS (other parameters from json file)
+DL_type = 'DL_B'
 NPARCELLS = 21 # max 379
 fit_sigma = True
 fit_a = True
@@ -23,10 +25,14 @@ with open("hyperparams.json", "r") as f:
     params = json.load(f)
 
 DL = ADNI_A.ADNI_A(normalizeBurden=False)
+SC_HC_Avg = DL.get_AvgSC_ctrl()
+if DL_type == 'DL_B':
+    DL = ADNI_B.ADNI_B_Alt(['HC', 'AD'])
+
 all_data = []
-for group in ['HC', 'MCI', 'AD']:
+for group in DL.get_groupLabels():
     print(f"Loading {group}...")
-    all_data.extend(load_data_records.load_group_data(DL, group))
+    all_data.extend(load_data_records.load_group_data(DL, group, SC=SC_HC_Avg))
 TSemp_zsc = zfilterts.prepare_timeseries(all_data, NPARCELLS)
 group_data = load_data_records.prepare_group_data(all_data, NPARCELLS)
 
@@ -36,7 +42,6 @@ groups_fitted = set()
 
 for idx, subj_data in enumerate(all_data):
     
-    # Fit group (only once per group)
     current_group = subj_data['group']
     if current_group not in groups_fitted:
         print(f"\nFitting {current_group} group model...")
@@ -49,7 +54,6 @@ for idx, subj_data in enumerate(all_data):
         group_results.append(single_group_result)
         groups_fitted.add(current_group)
 
-    # Fit individual subject
     single_subject_result = LinHopfFit.fit_linhopf(subj_data, TSemp_zsc[idx], sigma_ini, a_ini, verbose, params, NPARCELLS)
     single_subject_result.update({
         'subject_id': subj_data['subject_id'],
@@ -70,6 +74,6 @@ results_dict = {str(key): value for key, value in df.to_dict(orient="list").item
 repo_root = os.getcwd()
 save_path = os.path.join(repo_root, "data", "HOPF_DATA")
 os.makedirs(save_path, exist_ok=True)
-filename = f"linhopf_fit_N{NPARCELLS}_sig{fit_sigma}_a{fit_a}.npz"
+filename = f"linhopf_fit_{DL_type}_N{NPARCELLS}_sig{fit_sigma}_a{fit_a}.npz"
 
 np.savez_compressed(f"{save_path}/{filename}", **results_dict)

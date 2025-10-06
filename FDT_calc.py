@@ -22,8 +22,8 @@ from scipy.linalg import solve_continuous_lyapunov
 import pandas as pd
 import matplotlib.pyplot as plt
 from functions_violinplots_WN3_v0 import plot_violins_HC_MCI_AD
-import p_values as p_values  # Make sure this is working!
-import statannotations_permutation
+import src.analysis.p_values as p_values  # Make sure this is working!
+import src.analysis.statannotations_permutation as statannotations_permutation
 
 
 

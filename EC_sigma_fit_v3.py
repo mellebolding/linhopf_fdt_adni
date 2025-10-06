@@ -83,8 +83,8 @@ import functions_boxplots_WN3_v0
 from typing import Union
 from numba import njit, prange, objmode
 import time
-import p_values as p_values
-import statannotations_permutation
+import src.analysis.p_values as p_values
+import src.analysis.statannotations_permutation as statannotations_permutation
 from LinHopf_EC_Sig_A_fit_adam_numba import LinHopf_Ceff_sigma_a_fitting_adam
 
 

@@ -31,8 +31,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from functions_violinplots_WN3_v0 import plot_violins_HC_MCI_AD
 from functions_boxplots_WN3_v0 import plot_boxes_HC_MCI_AD
-import p_values as p_values
-import statannotations_permutation
+import src.analysis.p_values as p_values
+import src.analysis.statannotations_permutation as statannotations_permutation
 from nilearn import surface, datasets, plotting
 import nibabel as nib
 from matplotlib.cm import ScalarMappable
