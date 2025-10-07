@@ -26,13 +26,20 @@ with open("hyperparams.json", "r") as f:
 
 DL = ADNI_A.ADNI_A(normalizeBurden=False)
 SC_HC_Avg = DL.get_AvgSC_ctrl()
+
+SC_400 = np.pad(
+    SC_HC_Avg,
+    pad_width=((0, 21), (0, 21)),
+    mode='constant',
+    constant_values=SC_HC_Avg.mean()
+)
 if DL_type == 'DL_B':
     DL = ADNI_B.ADNI_B_Alt(['HC', 'AD'])
 
 all_data = []
 for group in DL.get_groupLabels():
     print(f"Loading {group}...")
-    all_data.extend(load_data_records.load_group_data(DL, group, SC=SC_HC_Avg))
+    all_data.extend(load_data_records.load_group_data(DL, group, SC=SC_400))
 TSemp_zsc = zfilterts.prepare_timeseries(all_data, NPARCELLS)
 group_data = load_data_records.prepare_group_data(all_data, NPARCELLS)
 
