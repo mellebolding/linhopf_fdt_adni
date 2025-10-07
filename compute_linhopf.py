@@ -14,7 +14,7 @@ start_time = time.time()
 
 ### MAIN INPUT PARAMETERS (other parameters from json file)
 DL_type = 'DL_B'
-NPARCELLS = 21 # max 379
+NPARCELLS = 400 # max 379
 fit_sigma = True
 fit_a = True
 verbose = False

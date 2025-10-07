@@ -15,7 +15,7 @@ export MPLCONFIGDIR=/tmp/mplconfig_$SLURM_JOB_ID
 mkdir -p $MPLCONFIGDIR
 
 # Go to your script directory (optional but clean)
-cd /home/cluster/melle/LINHOPF_FDT_ADNI
+cd /home/cluster/melle/linhopf_fdt_adni
 
 # Run your Python script
 python compute_linhopf.py
