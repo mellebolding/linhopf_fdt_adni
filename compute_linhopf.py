@@ -13,7 +13,7 @@ from typing import Union
 start_time = time.time()
 
 ### MAIN INPUT PARAMETERS (other parameters from json file)
-DL_type = 'DL_B'
+DL_type = 'DL_B2'
 NPARCELLS = 400 # max 379
 fit_sigma = True
 fit_a = True
@@ -33,13 +33,19 @@ SC_400 = np.pad(
     mode='constant',
     constant_values=SC_HC_Avg.mean()
 )
-if DL_type == 'DL_B':
+if DL_type == 'DL_B1':
     DL = ADNI_B.ADNI_B_Alt(['HC', 'AD'])
+if DL_type == 'DL_B2':
+    DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB-)', 'MCI(AB+)', 'AD'])
 
 all_data = []
 for group in DL.get_groupLabels():
     print(f"Loading {group}...")
     all_data.extend(load_data_records.load_group_data(DL, group, SC=SC_400))
+    mri_values = all_data[1]['MRI']
+    print(f"Max MRI value: {np.max(mri_values)}")
+    print(f"Min MRI value: {np.min(mri_values)}")
+    print(f"Mean MRI value: {np.mean(mri_values)}")
 TSemp_zsc = zfilterts.prepare_timeseries(all_data, NPARCELLS)
 group_data = load_data_records.prepare_group_data(all_data, NPARCELLS)
 

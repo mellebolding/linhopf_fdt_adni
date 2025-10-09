@@ -221,7 +221,11 @@ def plotComparisonAcrossLabels2Ax(ax, tests, custom_test=None,
     if isinstance(tests, dict):
         tests = padEqualLengthDicts(tests)
     df = pd.DataFrame(tests, columns=columnLables)
-    sns.boxplot(data=df, order=columnLables, ax=ax)
+    default_color_map = {'HC': '#1f77b4', 'MCI': '#ff7f0e', 'AD': '#2ca02c'}
+    tab10 = sns.color_palette('tab10')
+    palette_list = [default_color_map.get(label, tab10[i % len(tab10)]) for i, label in enumerate(columnLables)]
+    palette = dict(zip(columnLables, palette_list))
+    sns.boxplot(data=df, order=columnLables, ax=ax, palette=palette)
     # sns.catplot(data=df, kind="box")
     if pairs == None:
         pairs = list(combinations(columnLables, 2))
@@ -250,6 +254,84 @@ def plotComparisonAcrossLabels2(tests, custom_test=None,
         plt.close(fig)
     else:
         plt.show()
+
+def plotComparisonAcrossLabels_ranksum(data_dict, columnLables, graphLabel, y_axis_label='Value', h_line=None, save_path=None, dpi=300):
+    """
+    Generates a simplified box plot comparison across groups.
+    Uses Wilcoxon Rank-Sum test for significance and mimics the structure 
+    of common plotting utilities while remaining concise.
+
+    Args:
+        data_dict (dict): Dictionary where keys are group labels (e.g., 'HC') 
+                          and values are the 1D data arrays (parcel averages).
+        columnLables (list of str): The group labels, specifying plot order (e.g., ['HC', 'MCI', 'AD']).
+        graphLabel (str): The main title of the plot.
+        y_axis_label (str): The label for the Y-axis. Defaults to 'Value'.
+        h_line (float, optional): Value to plot a horizontal line at. Defaults to None.
+        save_path (str, optional): Full path (including filename) to save the plot.
+        dpi (int): Dots per inch for saved image quality.
+    """
+    
+    fig, ax = plt.subplots(figsize=(6, 5))
+    sns.set_context('notebook', font_scale=1.2)
+    
+    data = pd.concat([
+        pd.DataFrame({'value': data_dict[l], 'cond': l}) 
+        for l in columnLables if l in data_dict
+    ], ignore_index=True)
+
+    labels = [l for l in columnLables if l in data_dict]
+    default_color_map = {'HC': '#1f77b4', 'MCI': '#ff7f0e', 'AD': '#2ca02c'}
+    tab10 = sns.color_palette('tab10')
+    palette_list = [default_color_map.get(label, tab10[i % len(tab10)]) for i, label in enumerate(columnLables)]
+    palette = dict(zip(columnLables, palette_list))
+    sns.boxplot(y="value", x="cond", data=data, ax=ax, order=labels, palette=palette, linewidth=1)
+    sns.swarmplot(y="value", x="cond", data=data, ax=ax, order=labels, size=3, color=".25")
+    
+    pairs = [(labels[i], labels[j]) for i in range(len(labels)) for j in range(i+1, len(labels))]
+    
+    max_y = data['value'].max()
+    min_y = data['value'].min()
+    y_range = max_y - min_y
+    y_increment = y_range * 0.05 if y_range > 0 else 0.1
+    yposition = max_y + (y_increment * 1.5)
+    
+    # (Wilcoxon Rank-Sum)
+    for pair in pairs:
+        group1 = data[data['cond'] == pair[0]]['value']
+        group2 = data[data['cond'] == pair[1]]['value']
+        
+        if not group1.empty and not group2.empty:
+            p_value = stats.ranksums(group1, group2).pvalue
+            
+            sig = '***' if p_value < 0.001 else \
+                  '**' if p_value < 0.01 else \
+                  '*' if p_value < 0.05 else \
+                  'n.s.'
+            
+            idx1, idx2 = labels.index(pair[0]), labels.index(pair[1])
+            ax.plot([idx1, idx2], [yposition, yposition], color='black', lw=1)
+            ax.text((idx1 + idx2) / 2, yposition + (y_increment * 0.2), sig,
+                    ha='center', va='bottom', color='black', fontsize=10)
+            yposition += y_increment # Increment y position for the next line
+
+    ax.set_ylim(min_y * 0.95, yposition + y_increment) 
+    ax.set_xlabel('')
+    ax.set_ylabel(y_axis_label)
+    ax.set_title(graphLabel) # Renamed to graphLabel
+    ax.set_xticklabels(labels) # Set the labels for the x-axis
+    
+    if h_line is not None:
+        ax.axhline(h_line, color='red', linestyle='--', linewidth=1, zorder=0, alpha=0.7)
+    
+    plt.tight_layout()
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        print(f"Saving plot to: {save_path}")
+        plt.savefig(save_path, bbox_inches='tight', dpi=dpi)
+
+    plt.close(fig) 
 
 
 # ----------------------------------------------------------------------------

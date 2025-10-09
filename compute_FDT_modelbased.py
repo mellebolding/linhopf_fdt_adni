@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 from src.functions_frameworks.functions_FDT_norm2 import I_norm2, X_norm2
 
-DL_type = 'DL_A'
-NPARCELLS = 21  # max 379
+DL_type = 'DL_B'
+NPARCELLS = 400  # max 379
 fit_sigma = True
 fit_a = True
 
@@ -18,7 +18,7 @@ df = I_norm2(df)
 df = X_norm2(df)
 
 results_dict = {str(key): value for key, value in df.to_dict(orient="list").items()}
-
+print(results_dict.keys())
 repo_root = os.getcwd()
 save_path = os.path.join(repo_root, "data", "FDT_DATA")
 os.makedirs(save_path, exist_ok=True)
