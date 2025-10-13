@@ -88,69 +88,397 @@ def get_data():
 
 
 from src.data_loaders.load_data_records import loadProteins
-filename = f"FDT_results_DL_B_N400_modelfree.npz"
+# ==================== DATA SETUP ====================
+filename = f"FDT_results_DL_B_N400_sigTrue_aTrue.npz"
 repo_root = os.getcwd() 
 save_path = os.path.join(repo_root, "data", "FDT_DATA")
 fdt_data = np.load(os.path.join(save_path, filename), allow_pickle=True)
 df = pd.DataFrame({k: fdt_data[k].tolist() for k in fdt_data.files})
-df = loadProteins(df, 'DL_B', 'ABeta', repo_root) #'Amyloid' or 'Tau'
-df = loadProteins(df, 'DL_B', 'Tau', repo_root) #'Amyloid' or 'Tau'
+df = loadProteins(df, 'DL_B', 'ABeta', repo_root)
+df = loadProteins(df, 'DL_B', 'Tau', repo_root)
 
+# Create feature matrices - each has shape (N_subjects, N_parcels)
 Xdict = {
-    'ABeta': np.column_stack([
-        np.array([np.mean(x) for x in df['ABeta']])
-    ]),
-    'Tau': np.column_stack([
-        np.array([np.mean(x) for x in df['Tau']])
-    ]),
-    'I_norm2': np.column_stack([
-        np.array([np.mean(x) for x in df['I_norm2']])
-    ])
-}
-Xdict = {
-    'ABeta_1': df['ABeta'].values,
-    'Tau_1': df['Tau'].values,
-    'I_norm2_1': df['I_norm2'].values
+    'I_norm2': np.stack(df['I_norm2'].values),
+    'X_norm2': np.stack(df['X_norm2'].values),
+    'ABeta': np.stack(df['ABeta'].values),
+    'Tau': np.stack(df['Tau'].values),
 }
 
-print(df['ABeta'][1].values)
+# Setup labels
 group_map = {'HC': 1, 'AD': 2}
 group_classes = ['HC', 'AD']
 Y = df['group'].map(group_map).values
 
 emp_varnames = ['ABeta', 'Tau']
-sim_varnames = ['I_norm2']
+sim_varnames = ['I_norm2', 'X_norm2']
+good_sim = sim_varnames
 
 Nclass = np.unique(Y).shape[0]
 Nsubj = Y.shape[0]
 
-# Correct from some vectors having dim==1, when sklearn needs dim==2
+# Correct vectors with dim==1
 for key in Xdict.keys():
     if len(Xdict[key].shape) == 1:
         Xdict[key] = np.expand_dims(Xdict[key], axis=1)
 
-Ystr = [['HC','AD'][c-1] for c in Y]
+Ystr = [group_classes[c-1] for c in Y]
 
-# lists of simulated features to exclude
-# if USE_GI:
-#     bad_sim = ['Bifurcations','Mean_real_freq_global','Mean_unreal_freq_global']
-# else:
-#     bad_sim = ['Bifurcations','Mean_real_freq_global','Mean_unreal_freq_global',
-#                'High_d33','Low_d33','Capacity33']
-
-# good_sim = list(set(sim_varnames[:-1]).symmetric_difference(bad_sim))
-good_sim = sim_varnames
-
-# Feature information / names
-# flabels = sio.loadmat('Regions+degree.mat')
-# degrees = np.array(flabels['degree'])
-degrees = np.ones(400)
-# reg = sio.loadmat('regionnames.mat')
-# reg = reg['regions']
-regions = [f'Region_{i+1}' for i in range(400)]
-# regions = [n[0][0] for n in reg]
-# volnames = [n[0][0] for n in Volume_names]
+# Setup region/feature names - FIXED: proper parcel numbering
+N_parcels = Xdict['I_norm2'].shape[1]
+degrees = np.ones(N_parcels)
+regions = [str(i) for i in range(N_parcels)]  # Just use parcel numbers: 0, 1, 2, ...
 volnames = regions
+
+
+# ==================== HELPER FUNCTIONS ====================
+def extendFeatureNames(varnames, Xdict, regions):
+    """
+    Creates individual names for each feature column
+    
+    Example:
+    - 'ABeta' with 400 parcels → ['ABeta_0', 'ABeta_1', ..., 'ABeta_399']
+    - 'I_norm2' with 400 parcels → ['I_norm2_0', 'I_norm2_1', ..., 'I_norm2_399']
+    """
+    names = []
+    for var in varnames:
+        n = Xdict[var].shape[1]
+        if n == 1:
+            names.append(var)
+        else:         
+            names.extend([f'{var}_{regions[i]}' for i in range(n)])
+    return names
+
+
+def clean_features(X, featnames=None):
+    """Remove features with zero variance or too many repeated values"""
+    _, mc = scipy.stats.mode(X, axis=0, keepdims=True)
+    rmidx = np.where(np.std(X, axis=0) == 0)[0]
+    rmidx = np.append(rmidx, np.where(mc[0] > 10)[0], axis=0)
+    rmidx = np.unique(rmidx)
+    
+    X = np.delete(X, rmidx, axis=1)    
+    if featnames is not None:
+        trimmednames = [f for i, f in enumerate(featnames) if i not in rmidx]
+        return X, trimmednames, rmidx
+    else:
+        return X, None, rmidx
+
+
+def getFeatureMatrix(Xdict, varnames):
+    """
+    Constructs feature matrix from Xdict using variable names
+    Returns: X (cleaned), feature_names, removed_indices
+    """
+    # Build feature matrix
+    X = np.concatenate([Xdict[features] for features in varnames], axis=1)
+    
+    # Get feature names BEFORE cleaning
+    feature_names = extendFeatureNames(varnames, Xdict, regions)
+    
+    # Clean features and track which were removed
+    Xclean, cleaned_names, removed_idx = clean_features(X, feature_names)
+    
+    if Xclean.shape[1] > 0:
+        return Xclean, cleaned_names, removed_idx
+    else:
+        return X, feature_names, []
+
+
+# ==================== MAIN CLASSIFICATION ====================
+def nestedCV(Xdict, Y, varnames):
+    """
+    Nested cross-validation with Random Forest feature selection + SVM classification
+    
+    KEY FIX: Now properly tracks feature names through the entire pipeline
+    """
+    X, feature_names_all, removed_idx = getFeatureMatrix(Xdict, varnames)
+    print(f"Total features after cleaning: {X.shape[1]}")
+    print(f"Feature names example: {feature_names_all[:5]}")
+    
+    idx = np.arange(0, X.shape[0], 1)
+    
+    # Output storage
+    SC = []  # F1 scores
+    FI = []  # Feature importances (full vector for ALL features)
+    FX = []  # Feature indices (indices into cleaned feature set)
+    FN = []  # Feature names (actual names of selected features)
+    CM = []  # Confusion matrices
+    YH = []  # Predicted labels
+    YT = []  # True labels
+    TI = []  # Test indices
+    
+    # Setup
+    scoring = 'f1_weighted'
+    ssc = RobustScaler()
+    clf_inner = RFC(random_state=999)
+    clf_outer = svm.SVC(random_state=999)
+    
+    cv_inner = StratifiedShuffleSplit(n_splits=10, test_size=0.25, random_state=777)
+    cv_outer = StratifiedShuffleSplit(n_splits=100, test_size=0.25, random_state=888)
+    
+    fold_num = 0
+    for train_outer, test_outer in cv_outer.split(X, Y):
+        fold_num += 1
+        Xtrain, Xtest = X[train_outer], X[test_outer]
+        Ytrain, Ytest = Y[train_outer], Y[test_outer]
+        
+        # ===== INNER CV: Feature selection with Random Forest =====
+        pipeline_inner = Pipeline(memory=None,
+                                  steps=[('Scaler', ssc),
+                                         ('Classifier', clf_inner)])
+        
+        inner_params = [{
+            'Classifier__class_weight': ['balanced'],
+            'Classifier__criterion': ['entropy'],
+            'Classifier__n_estimators': [10, 50],
+            'Classifier__max_depth': [None],
+            'Classifier__min_samples_split': [3, 4],
+            'Classifier__min_samples_leaf': [2, 3],
+            'Classifier__max_features': ['sqrt'],
+        }]        
+    
+        grid_inner = GridSearchCV(pipeline_inner, inner_params, cv=cv_inner, 
+                                  scoring=scoring, verbose=False, n_jobs=-1)
+        grid_inner.fit(Xtrain, Ytrain)
+    
+        # Extract best model components
+        for obj in grid_inner.best_estimator_.steps:
+            if obj[0] == 'Scaler':
+                ssc_inner_best = base.clone(obj[1], safe=True)
+            elif obj[0] == 'Classifier':
+                clf_inner_best = base.clone(obj[1], safe=True)
+                fi = obj[1].feature_importances_
+
+        # MORE SELECTIVE FEATURE SELECTION
+        # Option 1: Top K features
+        K = min(50, len(fi))  # Select top 50 features (or fewer if less available)
+        fidx = np.argsort(fi)[::-1][:K]  # Top K by importance
+        
+        # Option 2: Threshold-based (uncomment to use instead)
+        # threshold = np.percentile(fi, 75)  # Top 25% of features
+        # fidx = np.where(fi >= threshold)[0]
+        
+        # Option 3: Cumulative importance (uncomment to use instead)
+        # sorted_idx = np.argsort(fi)[::-1]
+        # cumsum = np.cumsum(fi[sorted_idx])
+        # n_features = np.where(cumsum >= 0.95 * cumsum[-1])[0][0] + 1
+        # fidx = sorted_idx[:n_features]
+        
+        # Store feature importance and selected features
+        FI.append(fi)
+        FX.append(fidx)
+        
+        # Get actual feature NAMES for selected features
+        selected_names = [feature_names_all[i] for i in fidx]
+        FN.append(selected_names)
+        
+        if fold_num == 1:
+            print(f"\nFold 1 - Selected {len(fidx)} features:")
+            print(f"Top 10: {selected_names[:10]}")
+            print(f"Their importances: {fi[fidx[:10]]}")
+        
+        # ===== OUTER CV: SVM classification on selected features =====
+        pipeline_outer = Pipeline(memory=None,
+                                  steps=[('Scaler', ssc_inner_best),
+                                         ('Classifier', clf_outer)])
+        
+        outer_params = [
+            {
+                'Classifier__kernel': ['rbf'],
+                'Classifier__degree': [2],
+                'Classifier__gamma': [1e-2, 1e-1, 1],
+                'Classifier__C': [0.01, 0.1, 1, 10, 100]
+            },
+            {
+                'Classifier__kernel': ['poly'],
+                'Classifier__degree': [2, 3],
+                'Classifier__gamma': ['scale'],
+                'Classifier__C': [0.01, 0.1, 1, 10, 100]
+            }
+        ]
+        
+        # Create predefined split for test set
+        outer_split = -np.ones((len(idx),))
+        outer_split[test_outer] = 0
+        
+        grid_outer = GridSearchCV(pipeline_outer, outer_params, 
+                                  cv=PredefinedSplit(outer_split), 
+                                  scoring=scoring, verbose=False, n_jobs=-1)
+        
+        grid_outer.fit(X[:, fidx], Y)
+        SC.append(grid_outer.best_score_)
+        
+        # Extract best outer model
+        for obj in grid_outer.best_estimator_.steps:
+            if obj[0] == 'Scaler':
+                ssc_outer_best = base.clone(obj[1], safe=True)
+            elif obj[0] == 'Classifier':
+                clf_outer_best = base.clone(obj[1], safe=True)
+        
+        # Final prediction on test set
+        pipeline_opt = Pipeline(memory=None,
+                                steps=[('Scaler', ssc_outer_best),
+                                       ('Classifier', clf_outer_best)])
+        
+        pipeline_opt.fit(Xtrain[:, fidx], Ytrain)
+        yhat = pipeline_opt.predict(Xtest[:, fidx])
+
+        YH.append(yhat)        
+        CM.append(metrics.confusion_matrix(Ytest-1, yhat-1))
+        YT.append(Ytest)
+        TI.append(test_outer)
+        
+        if fold_num % 10 == 0:
+            print(f"Fold {fold_num}/100 - Score: {grid_outer.best_score_:.3f}")
+    
+    return SC, FI, FX, FN, CM, YH, YT, TI, feature_names_all
+
+
+# ==================== FEATURE IMPORTANCE ANALYSIS ====================
+def analyze_feature_importance(FI, FX, FN, feature_names_all, title=''):
+    """
+    Comprehensive feature importance analysis
+    
+    Returns:
+    - Selection frequency for each feature
+    - Mean importance for each feature
+    - Top features by both metrics
+    """
+    n_features = len(feature_names_all)
+    n_folds = len(FI)
+    
+    # Initialize counters
+    selection_count = np.zeros(n_features)
+    importance_sum = np.zeros(n_features)
+    importance_count = np.zeros(n_features)
+    
+    # Aggregate across all folds
+    for fold_idx in range(n_folds):
+        fi = FI[fold_idx]
+        fidx = FX[fold_idx]
+        
+        # Count selections
+        selection_count[fidx] += 1
+        
+        # Sum importances (only for selected features)
+        importance_sum[fidx] += fi[fidx]
+        importance_count[fidx] += 1
+    
+    # Calculate metrics
+    selection_freq = selection_count / n_folds * 100  # Percentage
+    mean_importance = np.divide(importance_sum, importance_count, 
+                                where=importance_count>0, 
+                                out=np.zeros_like(importance_sum))
+    
+    # Create summary dataframe
+    df_features = pd.DataFrame({
+        'Feature': feature_names_all,
+        'Selection_Frequency_%': selection_freq,
+        'Mean_Importance': mean_importance,
+        'Times_Selected': selection_count.astype(int)
+    })
+    
+    # Sort by selection frequency
+    df_features = df_features.sort_values('Selection_Frequency_%', ascending=False)
+    
+    print(f"\n{'='*60}")
+    print(f"FEATURE IMPORTANCE ANALYSIS - {title}")
+    print(f"{'='*60}")
+    print(f"\nTop 20 features by selection frequency:")
+    print(df_features.head(20).to_string(index=False))
+    
+    # Analyze by feature type
+    print(f"\n{'='*60}")
+    print("FEATURE TYPE BREAKDOWN:")
+    print(f"{'='*60}")
+    for var in set([name.split('_')[0] for name in feature_names_all]):
+        var_features = df_features[df_features['Feature'].str.startswith(var)]
+        n_selected = (var_features['Times_Selected'] > 0).sum()
+        avg_freq = var_features['Selection_Frequency_%'].mean()
+        print(f"{var:12s}: {n_selected:4d} parcels selected at least once (avg freq: {avg_freq:.1f}%)")
+    
+    return df_features
+
+
+def plot_FeatureFrequency_Top(FI, FX, FN, feature_names_all, title=None):
+    """
+    Plot top features by selection frequency with proper names
+    """
+    # Get feature statistics
+    df_features = analyze_feature_importance(FI, FX, FN, feature_names_all, title)
+    
+    # Get top 50 features
+    top_features = df_features.head(50)
+    
+    # Plot
+    fig, ax = plt.subplots(figsize=(20, 10))
+    
+    bars = ax.bar(range(len(top_features)), top_features['Selection_Frequency_%'])
+    ax.set_xticks(range(len(top_features)))
+    ax.set_xticklabels(top_features['Feature'], rotation=90, fontsize=10)
+    ax.set_ylabel('Selection Frequency (%)', fontsize=14)
+    ax.set_xlabel('Feature Name', fontsize=14)
+    ax.set_title(f'Top 50 Features by Selection Frequency - {title}', fontsize=16)
+    ax.grid(axis='y', alpha=0.3)
+    
+    # Color bars by feature type
+    colors = {'I_norm2': 'steelblue', 'X_norm2': 'lightblue', 
+              'ABeta': 'coral', 'Tau': 'salmon'}
+    for i, (idx, row) in enumerate(top_features.iterrows()):
+        feature_type = row['Feature'].split('_')[0]
+        bars[i].set_color(colors.get(feature_type, 'gray'))
+    
+    # Add legend
+    from matplotlib.patches import Patch
+    legend_elements = [Patch(facecolor=color, label=feat) 
+                      for feat, color in colors.items()]
+    ax.legend(handles=legend_elements, loc='upper right')
+    
+    plt.tight_layout()
+    plt.savefig(f'Feature_Selection_Frequency_{title}.png', 
+                bbox_inches='tight', dpi=400)
+    plt.show()
+    
+    # Save detailed results to Excel
+    df_features.to_excel(f'Feature_Importance_Detailed_{title}.xlsx', index=False)
+    print(f"\nDetailed results saved to: Feature_Importance_Detailed_{title}.xlsx")
+    
+    return df_features
+
+
+# ==================== RUN CLASSIFICATION ====================
+print("="*60)
+print("Running Empirical features (ABeta, Tau)...")
+print("="*60)
+sf1, FI1, FX1, FN1, CM1, YH1, YT1, TI1, feat_names1 = nestedCV(Xdict, Y, emp_varnames)
+
+print("\n" + "="*60)
+print("Running Simulated features (I_norm2, X_norm2)...")
+print("="*60)
+sf2, FI2, FX2, FN2, CM2, YH2, YT2, TI2, feat_names2 = nestedCV(Xdict, Y, sim_varnames)
+
+print("\n" + "="*60)
+print("Running Combined features...")
+print("="*60)
+sf3, FI3, FX3, FN3, CM3, YH3, YT3, TI3, feat_names3 = nestedCV(Xdict, Y, emp_varnames + sim_varnames)
+
+# Analyze and plot results
+print("\n" + "="*60)
+print("GENERATING VISUALIZATIONS AND REPORTS")
+print("="*60)
+
+df_emp = plot_FeatureFrequency_Top(FI1, FX1, FN1, feat_names1, title='Empirical')
+df_sim = plot_FeatureFrequency_Top(FI2, FX2, FN2, feat_names2, title='Simulated')
+df_com = plot_FeatureFrequency_Top(FI3, FX3, FN3, feat_names3, title='Combined')
+
+# Print performance summary
+print("\n" + "="*60)
+print("PERFORMANCE SUMMARY")
+print("="*60)
+print(f"Empirical:  F1 = {np.mean(sf1):.3f} ± {np.std(sf1):.3f}")
+print(f"Simulated:  F1 = {np.mean(sf2):.3f} ± {np.std(sf2):.3f}")
+print(f"Combined:   F1 = {np.mean(sf3):.3f} ± {np.std(sf3):.3f}")
 
 
 # %% Classification Functions
@@ -542,7 +870,7 @@ def NestedCV_RFC___(X, Y, varnames):
     return SC, FI, FX, YH
 
 # %% Run Classification Experiment
-CLASSIFIER = 'NEST' # 'SVM', 'RFC'
+CLASSIFIER = 'SVM' # 'SVM', 'RFC', 'NEST'
 DIM_REDUCTION = 'f_classif' # 'f_classif','pca', 'lda', 'l1', 'rfc'
 if CLASSIFIER == 'SVM':
     sf1, FI1, FX1, YH1 = NestedCV_SVM__(Xdict, Y, emp_varnames)
@@ -665,16 +993,16 @@ def plotScores(scores, stype='f1'):
     plt.savefig(savename, bbox_inches='tight', pad_inches=0.1, dpi=400)
     return None
 
-plot_confusion_matrix(np.sum(CM1,axis=0), None, normalize=True, classes=np.array(group_classes))
-plot_confusion_matrix(np.sum(CM2,axis=0), None, normalize=True, classes=np.array(group_classes))
-plot_confusion_matrix(np.sum(CM3,axis=0), None, normalize=True, classes=np.array(group_classes))
-print('after plotting confusion matrices')
-acc1 = [np.trace(cm)/np.sum(cm) for cm in CM1]
-acc2 = [np.trace(cm)/np.sum(cm) for cm in CM2]
-acc3 = [np.trace(cm)/np.sum(cm) for cm in CM3]
+# plot_confusion_matrix(np.sum(CM1,axis=0), None, normalize=True, classes=np.array(group_classes))
+# plot_confusion_matrix(np.sum(CM2,axis=0), None, normalize=True, classes=np.array(group_classes))
+# plot_confusion_matrix(np.sum(CM3,axis=0), None, normalize=True, classes=np.array(group_classes))
+# print('after plotting confusion matrices')
+# acc1 = [np.trace(cm)/np.sum(cm) for cm in CM1]
+# acc2 = [np.trace(cm)/np.sum(cm) for cm in CM2]
+# acc3 = [np.trace(cm)/np.sum(cm) for cm in CM3]
 
 plotScores([sf1,sf2,sf3], stype='f1')
-plotScores([acc1,acc2,acc3], stype='acc')
+# plotScores([acc1,acc2,acc3], stype='acc')
 print('after plotting scores')
 
 

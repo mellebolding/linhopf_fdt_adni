@@ -7,9 +7,9 @@
 # --------------------------------------------------------------------------------------
 import os
 import itertools
-
 import numpy as np
 import scipy.stats as stats
+from src.analysis import statannotations_permutation
 
 
 fontSize = 10
@@ -330,8 +330,128 @@ def plotComparisonAcrossLabels_ranksum(data_dict, columnLables, graphLabel, y_ax
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         print(f"Saving plot to: {save_path}")
         plt.savefig(save_path, bbox_inches='tight', dpi=dpi)
-
+        plt.show()
+    plt.show()
     plt.close(fig) 
+
+def parcel_comparison_rsn(df, measure, rsn_name, model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot):
+    # --- RSN Index Selection (Core Logic) ---
+    if rsn_name == 'All':
+        # Get all parcel indices
+        rsn_indices = list(range(NPARCELLS))
+        figure_name_rsn = f'{measure} Parcels'
+    else:
+        # Get RSN-specific parcel indices
+        rsn_parcels = df['parcel_RSNs'].iloc[0]
+        rsn_indices = [i for i, rsn in enumerate(rsn_parcels) if rsn == rsn_name]
+        figure_name_rsn = f'{measure} {rsn_name} Parcels'
+    # ----------------------------------------
+
+    # 1. Determine the figure name based on measure type
+    if measure in ['Tau', 'Amyloid', 'ABeta']:
+        figure_name = f'{figure_name_rsn} N{NPARCELLS}'
+    elif measure in ['I_norm2', 'X_norm2']:
+        if model_type == 'modelfree':
+            figure_name = f'{figure_name_rsn} Modelfree N{NPARCELLS}'
+        else:
+            figure_name = f'{figure_name_rsn} Modelbased N{NPARCELLS} sig{fit_sigma} a{fit_a}'
+
+    group_labels = df['group'].dropna().unique()
+
+    # Calculate the mean measure across subjects for the selected parcels
+    group_measure = {}
+    for group in group_labels:
+        group_df = df[df['group'] == group]
+        # Stack all measure arrays for the group
+        stacked_measures = np.stack(group_df[measure].values)
+        # Select only the target parcels (RSN or All)
+        rsn_measures = stacked_measures[:, rsn_indices]
+        # Calculate mean across subjects (axis=0)
+        group_measure[group] = np.nanmean(rsn_measures, axis=0)
+    
+    # Assuming plotComparisonAcrossLabels2 is defined elsewhere
+    plotComparisonAcrossLabels2(
+        group_measure,
+        custom_test=statannotations_permutation.stat_permutation_test,
+        columnLables=group_labels, # Note: this parameter might need adjustment in your original code
+        graphLabel=figure_name,
+        save_path=os.path.join(save_path_plot, figure_name + '.png')
+    )
+
+    return group_measure
+
+def subject_comparison_rsn(df, measure, rsn_name, model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot):
+    # --- RSN Index Selection (Core Logic) ---
+    if rsn_name == 'All':
+        # Get all parcel indices
+        rsn_indices = list(range(NPARCELLS))
+        figure_name_rsn = f'{measure} Subjects'
+        y_label_suffix = ''
+    else:
+        # Get RSN-specific parcel indices
+        rsn_parcels = df['parcel_RSNs'].iloc[0]
+        rsn_indices = [i for i, rsn in enumerate(rsn_parcels) if rsn == rsn_name]
+        figure_name_rsn = f'{measure} {rsn_name} Subjects'
+        y_label_suffix = f' ({rsn_name} Avg)'
+    # ----------------------------------------
+    
+    # 1. Determine the figure name based on measure type
+    if measure in ['Tau', 'Amyloid', 'ABeta']:
+        figure_name = f'{figure_name_rsn} N{NPARCELLS}'
+    elif measure in ['I_norm2', 'X_norm2']:
+        if model_type == 'modelfree':
+            figure_name = f'{figure_name_rsn} Modelfree N{NPARCELLS}'
+        else:
+            figure_name = f'{figure_name_rsn} Modelbased N{NPARCELLS} sig{fit_sigma} a{fit_a}'
+
+    group_labels = df['group'].dropna().unique()
+
+    # Calculate the mean measure across RSN parcels for each subject
+    group_measure = {}
+    for group in group_labels:
+        group_df = df[df['group'] == group]
+        # Stack all measure arrays for the group
+        stacked_measures = np.stack(group_df[measure].values)
+        # Select only the target parcels (RSN or All)
+        rsn_measures = stacked_measures[:, rsn_indices]
+        # Calculate mean across parcels (axis=1) for each subject
+        group_measure[group] = np.nanmean(rsn_measures, axis=1)
+
+    # Assuming plotComparisonAcrossLabels_ranksum is defined elsewhere
+    plotComparisonAcrossLabels_ranksum(
+        group_measure,
+        columnLables=group_labels,
+        graphLabel=figure_name,
+        y_axis_label=f'Subject {measure}{y_label_suffix}',
+        save_path=os.path.join(save_path_plot, figure_name + '.png')
+    )
+    
+    return group_measure
+
+
+def parcel_comparison(df, measure, model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot):
+    return parcel_comparison_rsn(
+        df=df,
+        measure=measure,
+        rsn_name='All', # Pass 'All' to select all parcels
+        NPARCELLS=NPARCELLS,
+        fit_sigma=fit_sigma,
+        fit_a=fit_a,
+        save_path_plot=save_path_plot,
+        model_type=model_type
+    )
+
+def subject_comparison(df, measure, model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot):
+    return subject_comparison_rsn(
+        df=df,
+        measure=measure,
+        rsn_name='All', # Pass 'All' to select all parcels
+        NPARCELLS=NPARCELLS,
+        fit_sigma=fit_sigma,
+        fit_a=fit_a,
+        save_path_plot=save_path_plot,
+        model_type=model_type
+    )
 
 
 # ----------------------------------------------------------------------------
