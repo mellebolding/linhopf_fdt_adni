@@ -154,7 +154,9 @@ class ADNI_B_N238rev:
     def get_subjectData(self, subjectID):
         group = self.get_classification()[subjectID]
         ts = self.timeseries[group][subjectID]
-        meta = self.meta_information[self.meta_information['PTIDS'] == subjectID].to_dict('records')[0]
+        PTID_KEY = f'combined_PTIDS_ADNI3_{group}_MPRAGE'
+        if group == 'MCI': PTID_KEY = 'PTID_BIDS_MPRAGE_60_89_batch_1_MCI'
+        meta = self.meta_information[self.meta_information[PTID_KEY] == subjectID].to_dict('records')[0]
         return {subjectID: {'timeseries': ts,
                             'ABeta': self.burdens[group][subjectID]['ABeta'],
                             'Tau': self.burdens[group][subjectID]['Tau'],
