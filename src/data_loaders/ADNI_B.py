@@ -93,7 +93,7 @@ class ADNI_B_N238rev:
             PTIDs = hdf.loadmat(ID_path)
             PTID_KEY = f'combined_PTIDS_ADNI3_{task}_MPRAGE'
             if task == 'MCI': PTID_KEY = 'PTID_BIDS_MPRAGE_60_89_batch_1_MCI'
-            PTIDs = PTIDs['PTID_KEY']
+            PTIDs = PTIDs[PTID_KEY]
             IDs = [id[0] for id in np.squeeze(PTIDs).tolist()]
             self.timeseries[task] = self.__loadSubjects_fMRI(IDs, fMRI_task_path)
             self.burdens[task] = self.__loadSubjects_burden(IDs)
