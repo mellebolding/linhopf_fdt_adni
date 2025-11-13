@@ -7,7 +7,7 @@ from src.analysis.p_values import parcel_comparison, subject_comparison
 import json
 
 DL_type = 'DL_A'
-model_type = 'modelfree'  # 'modelfree' or 'modelbased'
+model_type = 'modelbased'  # 'modelfree' or 'modelbased'
 NPARCELLS = 379 # max 379 for DL_A, max 400 for DL_B
 fit_sigma = True
 fit_a = True
@@ -24,10 +24,11 @@ df = pd.DataFrame({k: fdt_data[k].tolist() for k in fdt_data.files})
 df = loadProteins(df, DL_type, 'Amyloid', repo_root) #'Amyloid' or 'Tau'
 df = loadProteins(df, DL_type, 'Tau', repo_root) #'Amyloid' or 'Tau'
 
-#print(df.columns)
-# parcel_comparison(df, 'I_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
-#subject_comparison(df, 'I_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
-
+# #print(df.columns)
+parcel_comparison(df, 'I_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
+subject_comparison(df, 'I_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
+parcel_comparison(df, 'X_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
+subject_comparison(df, 'X_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 #print(np.max([np.max(arr) for arr in df['ABeta'].values if isinstance(arr, np.ndarray)]))
 
 import json
@@ -65,8 +66,8 @@ def add_parcel_info_to_df(df, NPARCELLS, json_data_path):
 add_parcel_info_to_df(df, NPARCELLS, os.path.join(repo_root, 'hyperparams.json'))
 
 print(df.head())
-measure = 'I_norm2'
-#parcel_comparison_rsn(df, 'X_norm2', 'Limbic', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
+measure = 'Amyloid'
+parcel_comparison_rsn(df, 'X_norm2', 'Limbic', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 subject_comparison_rsn(df, measure, 'Vis', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 subject_comparison_rsn(df, measure, 'SomMot', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 subject_comparison_rsn(df, measure, 'DorsAttn', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)

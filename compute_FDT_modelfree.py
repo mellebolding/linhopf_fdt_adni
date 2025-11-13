@@ -4,16 +4,18 @@ from scipy import signal
 from src.data_loaders import ADNI_A, ADNI_B, load_data_records
 from src.functions_frameworks.functions_FDT_modelfree import _splitSignal, _analysisFdt2, _computeDistanceFromEquilibrium
 
-DL_type = 'DL_A'
+DL_type = 'DL_B2'
 TR = 3
 
 if DL_type == 'DL_A': 
     DL = ADNI_A.ADNI_A(normalizeBurden=False)
     NPARCELLS = 379
-
 if DL_type == 'DL_B': 
     DL = ADNI_B.ADNI_B_Alt(['HC', 'AD'])
     NPARCELLS = 400  
+if DL_type == 'DL_B2': 
+    DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB-)', 'MCI(AB+)', 'AD'])
+    NPARCELLS = 400
 
 all_data = []
 ts = np.array([])
@@ -25,17 +27,19 @@ for i in range(len(all_data)):
     x, dxdt, Fx, eta = _splitSignal(all_data[i]['MRI'][:,:NPARCELLS])
     dt = TR / 1000.
     sigma = np.std(eta)
-    C, R, I = _analysisFdt2(x, eta, sigma, dt)
-    intI = _computeDistanceFromEquilibrium(I)
+    C, R, I, I_norm2, X_norm2 = _analysisFdt2(x, eta, sigma, dt)
+    intI = _computeDistanceFromEquilibrium(I_norm2)
+    intX = _computeDistanceFromEquilibrium(X_norm2)
     results.append({
         'subject_id': all_data[i]['subject_id'],
         'group': all_data[i]['group'],
         'sigma': sigma,
         'I_norm2': intI,
+        'X_norm2': intX,
     })
 
 results_dict = {key: np.array([d[key] for d in results])
-        for key in ['subject_id', 'group', 'I_norm2', 'sigma']}
+        for key in ['subject_id', 'group', 'I_norm2', 'X_norm2', 'sigma']}
 
 repo_root = os.getcwd()
 save_path = os.path.join(repo_root, "data", "FDT_DATA")

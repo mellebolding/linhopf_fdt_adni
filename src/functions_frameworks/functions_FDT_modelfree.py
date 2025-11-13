@@ -81,39 +81,54 @@ def _splitSignal(fMRI): # MUST include 'self' since it's an instance method
         eta = dxdt - mFx
         return x, dxdt, Fx, eta
 
-def _analysisFdt2(x, eta, sigma, dt): # MUST include 'self'
-        """
-        Main equilibrium (FDT) analysis
-        This is a more efficient version than the old FDTAnalysis(x, eta, dt)
-
-        :param x: the signal (rois, timepoints)
-        :param eta: the noise (rois, timepoints)
-        :param sigma: the noise variance
-        :param dt: the time step
-        :return: the three matrices Cts, Rts, Its
-        """
-        T = sigma ** 2 / 2.
-
-        nsim, nsteps = x.shape
-        Cts = np.zeros((nsteps, nsteps))
-        Rts = np.zeros((nsteps, nsteps))
-
-        for i in range(nsim):
-            Cts += np.outer(x[i], x[i])
-            Rts += np.outer(x[i], eta[i])
-
-        # Ensemble average
-        Cts /= nsim
-        Rts /= (nsim * sigma ** 2)
-
-        # Calculates I(t,s) = C(t,t) - C(t,s) - T int_s^t R(t,s)
-        Its = np.zeros((nsteps, nsteps))
-        for tt in range(nsteps):
-            for ss in range(tt):
-                tintaux = dt * np.arange(ss, tt + 1)
-                Rintaux = Rts[tt, ss:tt + 1]
-                intRaux = np.trapz(y=Rintaux, x=tintaux)
-                Its[tt, ss] = Cts[tt, tt] - Cts[tt, ss] - T * intRaux  # np.triu(A,1).sum()
+def _analysisFdt2(x, eta, sigma, dt, normalize=True):
+    """
+    Main equilibrium (FDT) analysis
+    This is a more efficient version than the old FDTAnalysis(x, eta, dt)
+    :param x: the signal (rois, timepoints)
+    :param eta: the noise (rois, timepoints)
+    :param sigma: the noise variance
+    :param dt: the time step
+    :param normalize: if True, return normalized I and X matrices
+    :return: the three matrices Cts, Rts, Its (and optionally I_norm2, X_norm2)
+    """
+    T = sigma ** 2 / 2.
+    nsim, nsteps = x.shape
+    Cts = np.zeros((nsteps, nsteps))
+    Rts = np.zeros((nsteps, nsteps))
+    for i in range(nsim):
+        Cts += np.outer(x[i], x[i])
+        Rts += np.outer(x[i], eta[i])
+    # Ensemble average
+    Cts /= nsim
+    Rts /= (nsim * sigma ** 2)
+    
+    # Calculates I(t,s) = C(t,t) - C(t,s) - T * X(t,s)
+    # where X(t,s) = int_s^t R(t,s') ds'
+    Its = np.zeros((nsteps, nsteps))
+    Xts = np.zeros((nsteps, nsteps))  # Store the integrated response
+    
+    for tt in range(nsteps):
+        for ss in range(tt):
+            tintaux = dt * np.arange(ss, tt + 1)
+            Rintaux = Rts[tt, ss:tt + 1]
+            intRaux = np.trapz(y=Rintaux, x=tintaux)
+            
+            Xts[tt, ss] = intRaux  # Store X(t,s)
+            Its[tt, ss] = Cts[tt, tt] - Cts[tt, ss] - T * intRaux
+    
+    if normalize:
+        # Get diagonal of Cts: C(t,t) for each timepoint
+        Ctt = np.diag(Cts)  # Shape: (nsteps,)
+        
+        # Normalize I: I_norm2(t,s) = I(t,s) / C(t,t)
+        I_norm2 = Its / Ctt[:, np.newaxis]
+        
+        # Normalize X: X_norm2(t,s) = sigma^2 * X(t,s) / (2*C(t,t))
+        X_norm2 = (sigma ** 2 * Xts) / (2 * Ctt[:, np.newaxis])
+        
+        return Cts, Rts, Its, I_norm2, X_norm2
+    else:
         return Cts, Rts, Its
 
 def _computeDistanceFromEquilibrium(I):
