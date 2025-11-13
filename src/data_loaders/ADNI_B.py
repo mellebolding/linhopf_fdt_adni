@@ -150,7 +150,7 @@ class ADNI_B_N238rev:
     def get_subjectData(self, subjectID):
         group = self.get_classification()[subjectID]
         ts = self.timeseries[group][subjectID]
-        meta = self.meta_information[self.meta_information['PTID'] == subjectID].to_dict('records')[0]
+        meta = self.meta_information[self.meta_information['PTIDS'] == subjectID].to_dict('records')[0]
         return {subjectID: {'timeseries': ts,
                             'ABeta': self.burdens[group][subjectID]['ABeta'],
                             'Tau': self.burdens[group][subjectID]['Tau'],
