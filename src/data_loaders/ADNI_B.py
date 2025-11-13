@@ -107,10 +107,10 @@ class ADNI_B_N238rev:
         self.base_folder = path + "ADNI-B_DATA/N238rev/"
         fMRI_folder = self.base_folder + 'tseries/sch400/'
         if prefiltered_fMRI:
-            self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_IRFSPGR_sch400_N238rev.mat'
+            self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_batches123_sch400_matching_QC_COMBINED.mat'
         else:
-            self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_IRFSPGR_sch400_N238rev_nofilt.mat'
-        self.ID_path = fMRI_folder + 'PTID_ADNI3_{}_MPRAGE_IRFSPGR_all.mat'
+            self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_batches123_sch400_matching_QC_COMBINED.mat'
+        self.ID_path = fMRI_folder + 'combined_PTID_ADNI3_{}_MPRAGE.mat'
         self.ABeta_path = self.base_folder + 'abeta_wc_pvc/'
         self.tau_path = self.base_folder + 'tau_igm_pvc/'
 
