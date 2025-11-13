@@ -55,7 +55,9 @@ class ADNI_B_N238rev:
     def __loadSubjects_fMRI(self, IDs, fMRI_path):
         print(f'Loading {fMRI_path}')
         fMRIs = hdf.loadmat(fMRI_path)
-        fMRIs = fMRIs['tseries'][:, 0]
+        data_keys = [key for key in fMRIs.keys() if not key.startswith('__')]
+        tseries_key = data_keys[0]
+        fMRIs = fMRIs[tseries_key][:, 0]
         res = {IDs[i].tolist(): fMRIs[i] for i in range(len(IDs))}
         return res
 
