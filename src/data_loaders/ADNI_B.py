@@ -49,7 +49,7 @@ class ADNI_B_N238rev:
         self.meta_information = None
         self.__loadAllData()
         # ---------- discard all subjects with AD and ABeta-, because they are not subjects with dementia by AD...
-        self.discardSubjects(['116_S_6543','168_S_6754','022_S_6013','126_S_6721'])
+        self.discardSubjects(['116_S_6543','168_S_6754','022_S_6013'])#,'126_S_6721'])
 
     # ---------------- load fMRI data
     def __loadSubjects_fMRI(self, IDs, fMRI_path):
