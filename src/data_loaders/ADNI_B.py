@@ -91,7 +91,7 @@ class ADNI_B_N238rev:
             ID_path = self.ID_path.format(taskRealName)
             fMRI_task_path = self.fMRI_path.format(taskRealName)
             PTIDs = hdf.loadmat(ID_path)
-            PTIDs = PTIDs['PTID']
+            PTIDs = PTIDs['PTIDS']
             IDs = [id[0] for id in np.squeeze(PTIDs).tolist()]
             self.timeseries[task] = self.__loadSubjects_fMRI(IDs, fMRI_task_path)
             self.burdens[task] = self.__loadSubjects_burden(IDs)
