@@ -110,7 +110,7 @@ class ADNI_B_N238rev:
             self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_batches123_sch400_matching_QC_COMBINED.mat'
         else:
             self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_batches123_sch400_matching_QC_COMBINED.mat'
-        self.ID_path = fMRI_folder + 'combined_PTID_ADNI3_{}_MPRAGE.mat'
+        self.ID_path = fMRI_folder + 'combined_PTIDS_ADNI3_{}_MPRAGE.mat'
         self.ABeta_path = self.base_folder + 'abeta_wc_pvc/'
         self.tau_path = self.base_folder + 'tau_igm_pvc/'
 

@@ -5,7 +5,7 @@ from src.functions_frameworks.functions_FDT_norm2 import I_norm2, X_norm2
 
 DL_type = 'DL_A'
 NPARCELLS = 379  # max 379
-fit_sigma = False
+fit_sigma = True
 fit_a = False
 
 repo_root = os.getcwd() 
