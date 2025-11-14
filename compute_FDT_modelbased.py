@@ -4,9 +4,9 @@ import pandas as pd
 from src.functions_frameworks.functions_FDT_norm2 import I_norm2, X_norm2
 
 DL_type = 'DL_A'
-NPARCELLS = 379  # max 379
+NPARCELLS = 40  # max 379
 fit_sigma = True
-fit_a = False
+fit_a = True
 
 repo_root = os.getcwd() 
 save_path = os.path.join(repo_root, "data", "HOPF_DATA")
