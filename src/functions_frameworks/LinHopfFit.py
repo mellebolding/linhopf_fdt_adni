@@ -438,7 +438,7 @@ class LinearHopfModel:
             'competitive_coupling': kwargs.get('competitive_coupling', False),
             'allow_negative': kwargs.get('allow_negative', False),
             'Ceff_norm': kwargs.get('Ceff_norm', True),
-            'max_C': kwargs.get('max_C', 0.2),
+            'max_C': kwargs.get('max_C', 1.0),
             'max_iter': kwargs.get('max_iter', 10000),
             'patience': kwargs.get('patience', 4),
             'iter_check': kwargs.get('iter_check', 50),
@@ -696,7 +696,7 @@ class LinearHopfModel:
             Ceff = np.clip(Ceff, -self.params['max_C'], self.params['max_C'])
 
         # Symmetrize (assume undirected SC)
-        Ceff = 0.5 * (Ceff + Ceff.T)
+        #Ceff = 0.5 * (Ceff + Ceff.T)
 
         # Enforce zero diagonal
         np.fill_diagonal(Ceff, 0.0)
@@ -709,6 +709,33 @@ class LinearHopfModel:
 
         return Ceff
 
+
+# def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
+#     """Fit model for one subject"""
+#     SC = data['SC'][:NPARCELLS, :NPARCELLS]
+#     f_diff = data['f_diff'][:NPARCELLS]
+#     ts_zsc = data['ts'] if ts_zsc is None else ts_zsc
+#     hopf_params = params['hopfParamsAdam'].copy()
+#     hopf_params['verbose'] = verbose
+
+#     model = LinearHopfModel(
+#         C=SC, f_diff=f_diff, sigma=sigma_ini, a=a_ini, **hopf_params
+#     )
+#     model.setup_optimization(optimizer_method='adam', **hopf_params)
+#     Ceff, sigma, a, losses = model.fit(ts_zsc)
+#     FCemp = model.FCemp
+#     COVtauemp = model.COVtauemp
+#     FCsim = model.FCsim
+    
+#     return {
+#         'Ceff': Ceff,
+#         'sigma': sigma,
+#         'a': a,
+#         'losses': losses,
+#         'FCemp': FCemp,
+#         'FCsim': FCsim,
+#         'COVtauemp': COVtauemp
+#     }
 
 def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
     """Fit model for one subject"""
@@ -724,9 +751,37 @@ def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
     model.setup_optimization(optimizer_method='adam', **hopf_params)
     Ceff, sigma, a, losses = model.fit(ts_zsc)
     
+    # Get all empirical quantities
+    FCemp = model.FCemp
+    COVemp = model.COVemp
+    COVtauemp = model.COVtauemp
+    
+    # Get all simulated quantities (recompute final state)
+    FCsim, COVsim, COVsimtotal, A = model._hopf_int(Ceff, sigma, a)
+    COVtausim = model._compute_covtau(COVsimtotal, A, COVsim)
+    
     return {
+        # Parameters
         'Ceff': Ceff,
         'sigma': sigma,
         'a': a,
-        'losses': losses,
+        'SC': SC,  # Original structural connectivity
+        'f_diff': f_diff,
+        
+        # Empirical quantities
+        'FCemp': FCemp,
+        'COVemp': COVemp,
+        'COVtauemp': COVtauemp,
+        
+        # Simulated quantities
+        'FCsim': FCsim,
+        'COVsim': COVsim,
+        'COVtausim': COVtausim,
+        
+        # Jacobian (system dynamics matrix)
+        'A': A,
+        
+        # Loss information
+        'losses': losses
+        #'loss_history': model.loss_manager.history
     }

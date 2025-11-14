@@ -13,9 +13,9 @@ from typing import Union
 start_time = time.time()
 
 ### MAIN INPUT PARAMETERS (other parameters from json file)
-DL_type = 'DL_A'
-NPARCELLS = 379 # max 379
-fit_sigma = False
+DL_type = 'DL_B1'
+NPARCELLS = 400 # max 379
+fit_sigma = True
 fit_a = True
 verbose = False
 sigma_ini = 0.45 * np.ones(NPARCELLS)
@@ -65,6 +65,7 @@ for idx, subj_data in enumerate(all_data):
         single_group_result.update({
             'group': current_group,
             'f_diff': group_data[current_group]['f_diff'][:NPARCELLS],
+            'SC': group_data[current_group]['SC'][:NPARCELLS, :NPARCELLS],
         })
         group_results.append(single_group_result)
         groups_fitted.add(current_group)
@@ -74,6 +75,7 @@ for idx, subj_data in enumerate(all_data):
         'subject_id': subj_data['subject_id'],
         'group': subj_data['group'],
         'f_diff': subj_data['f_diff'][:NPARCELLS],
+        'SC': subj_data['SC'][:NPARCELLS, :NPARCELLS],
     })
     results.append(single_subject_result)
     if (idx + 1) % 10 == 0:

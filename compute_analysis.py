@@ -10,7 +10,7 @@ DL_type = 'DL_A'
 model_type = 'modelbased'  # 'modelfree' or 'modelbased'
 NPARCELLS = 379 # max 379 for DL_A, max 400 for DL_B
 fit_sigma = True
-fit_a = True
+fit_a = False
 
 
 repo_root = os.getcwd() 
@@ -66,7 +66,7 @@ def add_parcel_info_to_df(df, NPARCELLS, json_data_path):
 add_parcel_info_to_df(df, NPARCELLS, os.path.join(repo_root, 'hyperparams.json'))
 
 print(df.head())
-measure = 'Amyloid'
+measure = 'X_norm2'
 parcel_comparison_rsn(df, 'X_norm2', 'Limbic', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 subject_comparison_rsn(df, measure, 'Vis', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 subject_comparison_rsn(df, measure, 'SomMot', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
@@ -75,3 +75,4 @@ subject_comparison_rsn(df, measure, 'SalVentAttn', model_type, NPARCELLS, fit_si
 subject_comparison_rsn(df, measure, 'Limbic', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 subject_comparison_rsn(df, measure, 'Cont', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 subject_comparison_rsn(df, measure, 'Def', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
+
