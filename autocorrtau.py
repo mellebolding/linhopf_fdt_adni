@@ -32,7 +32,8 @@ def run_single_fit(t, params, NPARCELLS, DL_type, SC_400):
     # --- 2. Load and Prepare Data ---
     all_data = []
     for group in DL.get_groupLabels():
-        SC_HC_Avg = DL.get_AvgSC_ctrl()
+        DLA = ADNI_A.ADNI_A(normalizeBurden=False)
+        SC_HC_Avg = DLA.get_AvgSC_ctrl()
         SC_400 = np.pad(
             SC_HC_Avg,
             pad_width=((0, 21), (0, 21)),
@@ -94,8 +95,8 @@ def run_single_fit(t, params, NPARCELLS, DL_type, SC_400):
 start_time = time.time()
 
 # --- INPUT PARAMETERS ---
-DL_type = 'DL_A'
-NPARCELLS = 60
+DL_type = 'DL_B1'
+NPARCELLS = 20
 fit_sigma = True
 fit_a = True
 verbose = False

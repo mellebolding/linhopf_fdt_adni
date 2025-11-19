@@ -14,8 +14,11 @@ def emp_sim_triangles(DL_type='DL_A', NPARCELLS=40, fit_sigma=True, fit_a=True,
     
     empirical_fcs = np.stack(df['FCemp'][:n_conditions], axis=0)
     simulated_fcs = np.stack(df['FCsim'][:n_conditions], axis=0)
-    
-    # Truncate and set diagonal to zero FIRST
+    #print(df['losses'].values)
+    print(df['a'][0])
+    print(df['sigma'][0])
+
+    # Truncate and set diagonal to zero §FIRST
     for i in range(n_conditions):
         empirical_fcs[i] = empirical_fcs[i][:NPARCELLS, :NPARCELLS]
         simulated_fcs[i] = simulated_fcs[i][:NPARCELLS, :NPARCELLS]
@@ -171,9 +174,10 @@ def emp_sim_triangles(DL_type='DL_A', NPARCELLS=40, fit_sigma=True, fit_a=True,
     
     cbar.ax.yaxis.label.set_fontsize(14)
     cbar.ax.yaxis.label.set_fontweight('bold')
-
+    print(DL_type, NPARCELLS, fit_sigma, fit_a, joint_normalization)
     plt.show()
 
-emp_sim_triangles()
+emp_sim_triangles(DL_type='DL_B1', NPARCELLS=20, fit_sigma=True, fit_a=True, 
+                 joint_normalization=False, n_conditions=4)
 
 # def connectivity_matrices3():

@@ -8,6 +8,8 @@ import src.data_loaders.ADNI_B as ADNI_B
 def load_group_data(DL, group_name, SC=None):
     """Load all subjects from one group"""
     subject_ids = DL.get_groupSubjects(group_name)
+    if DL == 'DL_A': factor = 1/10
+    else: factor = 10
     group_data = []
     
     for subject_id in subject_ids:
@@ -15,7 +17,7 @@ def load_group_data(DL, group_name, SC=None):
         group_data.append({
             'subject_id': subject_id,
             'group': group_name,
-            'MRI': data[subject_id]['timeseries'].T,
+            'MRI': data[subject_id]['timeseries'].T*factor,
             'SC': data[subject_id]['SC'] if 'SC' in data[subject_id] else SC,
             'f_diff': filterps.calc_H_freq(
                 data[subject_id]['timeseries'].T, 3000, 

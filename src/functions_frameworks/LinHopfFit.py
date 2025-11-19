@@ -446,7 +446,7 @@ class LinearHopfModel:
             'loss_weights': kwargs.get('loss_weights', {'mse_fc': 0.5, 'mse_covtau': 0.5}),
             'fit_sigma': kwargs.get('fit_sigma', False),
             'fit_a': kwargs.get('fit_a', False),
-            'TR': kwargs.get('TR', 2.0),
+            'TR': kwargs.get('TR', 3.0),
             'tau': kwargs.get('tau', 1),
             'g': kwargs.get('g', 1.0),
         }
