@@ -8,7 +8,9 @@ import src.data_loaders.ADNI_B as ADNI_B
 def load_group_data(DL, group_name, SC=None):
     """Load all subjects from one group"""
     subject_ids = DL.get_groupSubjects(group_name)
-    if DL == 'DL_A': factor = 1/10
+    if DL == 'DL_A': 
+        factor = 1/10
+        print('yes')
     else: factor = 10
     group_data = []
     
