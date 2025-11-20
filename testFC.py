@@ -11,12 +11,11 @@ def emp_sim_triangles(DL_type='DL_A', NPARCELLS=40, fit_sigma=True, fit_a=True,
     filename = f"linhopf_fit_{DL_type}_N{NPARCELLS}_sig{fit_sigma}_a{fit_a}.npz"
     linhopf_data = np.load(os.path.join(save_path, filename), allow_pickle=True)
     df = pd.DataFrame({k: linhopf_data[k].tolist() for k in linhopf_data.files})
+    s = 15
+    empirical_fcs = np.stack(df['FCemp'][s:s+n_conditions], axis=0)
+    simulated_fcs = np.stack(df['FCsim'][s:s+n_conditions], axis=0)
+    print(df['losses'].values)
     
-    empirical_fcs = np.stack(df['FCemp'][:n_conditions], axis=0)
-    simulated_fcs = np.stack(df['FCsim'][:n_conditions], axis=0)
-    #print(df['losses'].values)
-    print(df['a'][0])
-    print(df['sigma'][0])
 
     # Truncate and set diagonal to zero §FIRST
     for i in range(n_conditions):

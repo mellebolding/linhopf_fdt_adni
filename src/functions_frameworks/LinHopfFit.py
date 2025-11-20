@@ -596,6 +596,7 @@ class LinearHopfModel:
             COVtau_all.append(COVtau)
         
         self.FCemp = np.mean(FC_all, axis=0)
+        #self.Ceff = FC  # Update C to empirical FC mean
         self.COVemp = np.mean(COV_all, axis=0)
         self.COVtauemp = np.mean(COVtau_all, axis=0)
     
@@ -620,13 +621,62 @@ class LinearHopfModel:
         COVtau *= sigratio
         return COVtau
     
+    # def _hopf_int(self, Ceff, sigma, a):
+    #     """Core Hopf integration"""
+    #     N = self.n_parcels
+    #     wo = self.f_diff * (2 * np.pi)
+        
+    #     # Build Jacobian
+    #     s = np.sum(Ceff, axis=1)
+    #     Axx = np.diag(a) - np.diag(s) + Ceff
+    #     Ayy = Axx.copy()
+    #     Ayx = np.diag(wo)
+    #     Axy = -Ayx.copy()
+        
+    #     A = np.block([[Axx, Axy], [Ayx, Ayy]])
+        
+    #     # Noise covariance
+    #     Qn = np.diag(np.concatenate([sigma**2, sigma**2]))
+        
+    #     # Solve Sylvester equation
+    #     try:
+    #         Cvth = solve_sylvester(A, A.T, -Qn)
+    #     except:
+    #         warnings.warn("Sylvester equation failed, using fallback")
+    #         Cvth = np.eye(2*N) * 0.01
+
+    #     if not np.all(np.isfinite(Cvth)):
+    #         warnings.warn("Non-finite values in Cvth")
+    #         Cvth = np.nan_to_num(Cvth, nan=0.0, posinf=1.0, neginf=-1.0)
+        
+    #     # Check eigenvalues of A for stability
+    #     eigvals = np.linalg.eigvals(A)
+    #     if np.any(eigvals.real > 0):
+    #         warnings.warn(f"Unstable system: {np.sum(eigvals.real > 0)} positive eigenvalues")
+    
+        
+    #     # Extract FC and COV
+    #     FCth = corrcov_py_numba(Cvth)
+    #     FC = FCth[:N, :N]
+    #     COV = Cvth[:N, :N]
+        
+    #     return FC, COV, Cvth, A
+    
     def _hopf_int(self, Ceff, sigma, a):
-        """Core Hopf integration"""
+        """Core Hopf integration with extensive diagnostics"""
         N = self.n_parcels
         wo = self.f_diff * (2 * np.pi)
         
+        # print(f"\n=== _hopf_int diagnostics ===")
+        # print(f"Ceff range: [{np.min(Ceff):.4f}, {np.max(Ceff):.4f}], mean: {np.mean(Ceff):.4f}")
+        # print(f"sigma range: [{np.min(sigma):.4f}, {np.max(sigma):.4f}]")
+        # print(f"a range: [{np.min(a):.4f}, {np.max(a):.4f}]")
+        # print(f"wo (frequencies) range: [{np.min(wo):.4f}, {np.max(wo):.4f}]")
+        
         # Build Jacobian
         s = np.sum(Ceff, axis=1)
+        # print(f"Row sums (s) range: [{np.min(s):.4f}, {np.max(s):.4f}]")
+        
         Axx = np.diag(a) - np.diag(s) + Ceff
         Ayy = Axx.copy()
         Ayx = np.diag(wo)
@@ -634,19 +684,70 @@ class LinearHopfModel:
         
         A = np.block([[Axx, Axy], [Ayx, Ayy]])
         
+        # CRITICAL: Check A matrix properties
+        # print(f"\nA matrix diagnostics:")
+        # print(f"A range: [{np.min(A):.4f}, {np.max(A):.4f}]")
+        # print(f"A diagonal: [{np.min(np.diag(A)):.4f}, {np.max(np.diag(A)):.4f}]")
+        
+        eigvals = np.linalg.eigvals(A)
+        max_real = np.max(eigvals.real)
+        min_real = np.min(eigvals.real)
+        # print(f"A eigenvalues (real part): [{min_real:.4f}, {max_real:.4f}]")
+        # print(f"Number of positive eigenvalues: {np.sum(eigvals.real > 0)}")
+        # print(f"Number near zero (|real| < 0.01): {np.sum(np.abs(eigvals.real) < 0.01)}")
+        
+        # Check if system is stable
+        if max_real > -0.001:
+            print("⚠️  WARNING: System is unstable or marginally stable!")
+            print("   This will cause Sylvester equation to fail or produce garbage")
+        
         # Noise covariance
         Qn = np.diag(np.concatenate([sigma**2, sigma**2]))
+        # print(f"\nQn (noise) diagonal range: [{np.min(np.diag(Qn)):.4f}, {np.max(np.diag(Qn)):.4f}]")
         
         # Solve Sylvester equation
-        Cvth = solve_sylvester(A, A.T, -Qn)
+        try:
+            Cvth = solve_sylvester(A, A.T, -Qn)
+            # print(f"\nCvth (covariance) computed successfully")
+            # print(f"Cvth range: [{np.min(Cvth):.4f}, {np.max(Cvth):.4f}]")
+            # print(f"Cvth diagonal: [{np.min(np.diag(Cvth)):.4f}, {np.max(np.diag(Cvth)):.4f}]")
+            
+            # Check for numerical issues
+            if not np.all(np.isfinite(Cvth)):
+                print("⚠️  ERROR: Non-finite values in Cvth!")
+                n_nan = np.sum(np.isnan(Cvth))
+                n_inf = np.sum(np.isinf(Cvth))
+                print(f"   NaN count: {n_nan}, Inf count: {n_inf}")
+            
+            # Check if Cvth is positive definite
+            eigvals_cvth = np.linalg.eigvals(Cvth)
+            min_eig_cvth = np.min(eigvals_cvth.real)
+            # print(f"Cvth min eigenvalue: {min_eig_cvth:.6f}")
+            if min_eig_cvth < 0:
+                print(f"⚠️  WARNING: Cvth is not positive definite! {np.sum(eigvals_cvth.real < 0)} negative eigenvalues")
+            
+        except Exception as e:
+            print(f"⚠️  ERROR solving Sylvester equation: {e}")
+            # Return dummy values to continue
+            Cvth = np.eye(2*N) * 0.01
         
         # Extract FC and COV
         FCth = corrcov_py_numba(Cvth)
         FC = FCth[:N, :N]
         COV = Cvth[:N, :N]
         
+        # print(f"\nFinal FC diagnostics:")
+        # print(f"FC range: [{np.min(FC):.4f}, {np.max(FC):.4f}]")
+        # print(f"FC diagonal: [{np.min(np.diag(FC)):.4f}, {np.max(np.diag(FC)):.4f}]")
+        fc_triu = FC[np.triu_indices_from(FC, k=1)]
+        # print(f"FC upper triangle: mean={np.mean(fc_triu):.4f}, std={np.std(fc_triu):.4f}")
+        # print(f"FC unique values (rounded to 3 decimals): {len(np.unique(np.round(fc_triu, 3)))}")
+        
+        if np.std(fc_triu) < 0.01:
+            print("⚠️  PROBLEM: FC is nearly uniform!")
+        
         return FC, COV, Cvth, A
-    
+
     def _compute_covtau(self, COVsimtotal, A, COVsim):
         """Compute COV(tau) for simulation"""
         N = self.n_parcels
@@ -655,59 +756,97 @@ class LinearHopfModel:
         COVtausim *= sigratio
         return COVtausim
     
+
     def _apply_Ceff_constraints(self, Ceff):
-        """Apply structural / sign / normalization constraints to effective connectivity.
-        
-        Rules:
-        - If competitive_coupling is False: only allow (non‑negative unless allow_negative=True)
-          weights where structural C > 0 (keep diagonal at 0). Elsewhere force 0.
-        - If competitive_coupling is True: allow positive and negative values on existing
-          structural links (still zero where no structural connection). Rows can be
-          mean-centered (excluding diagonal) to encourage competition.
-        - Always symmetrize to keep the matrix consistent with undirected SC.
-        - If Ceff_norm is True: scale globally so max |Ceff| <= self.max_C.
-        """
+        """Apply constraints matching the working dataset"""
         Ceff = np.array(Ceff, dtype=float, copy=True)
         N = self.n_parcels
 
-        # Structural mask (allow on structural links only)
+        # Structural mask
         mask = (self.C > 0)
-        # Always keep diagonal controllable separately (set to zero later)
         np.fill_diagonal(mask, False)
 
-        if not self.params['competitive_coupling']:
-            # Zero where no SC
-            Ceff[~mask] = 0.0
-            # Clip sign
-            if self.params['allow_negative']:
-                Ceff = np.clip(Ceff, -self.params['max_C'], self.params['max_C'])
-            else:
-                Ceff = np.clip(Ceff, 0.0, self.params['max_C'])
+        # Zero where no structure
+        Ceff[~mask] = 0.0
+        
+        # Clip individual values (like old dataset: max ~0.013)
+        if not self.params['allow_negative']:
+            Ceff = np.clip(Ceff, 0.0, 0.2)
         else:
-            # Competitive: allow +/- on existing links, zero elsewhere
-            Ceff[~mask] = 0.0
-            # Optional row mean-centering (excluding diagonal) to promote competition
-            for i in range(N):
-                row_mask = mask[i]
-                if np.any(row_mask):
-                    mean_val = Ceff[i, row_mask].mean()
-                    Ceff[i, row_mask] -= mean_val
-            # Clip
-            Ceff = np.clip(Ceff, -self.params['max_C'], self.params['max_C'])
+            Ceff = np.clip(Ceff, -0.02, 0.02)
 
-        # Symmetrize (assume undirected SC)
-        #Ceff = 0.5 * (Ceff + Ceff.T)
-
-        # Enforce zero diagonal
+        # Zero diagonal
         np.fill_diagonal(Ceff, 0.0)
 
-        # Global normalization if requested
-        if self.params['Ceff_norm']:
-            max_abs = np.max(np.abs(Ceff))
-            if max_abs > self.params['max_C'] and max_abs > 0:
-                Ceff *= (self.params['max_C'] / max_abs)
+        # **CRITICAL: Enforce row sum limits like working dataset**
+        # target_max_rowsum = self.params.get('target_row_sum', 10)
+        # row_sums = np.sum(np.abs(Ceff), axis=1)
+        # for i in range(N):
+        #     if row_sums[i] > target_max_rowsum:
+        #         Ceff[i, :] *= (target_max_rowsum / row_sums[i])
+        
+        # Final check: ensure we're in the right ballpark
+        # final_row_sums = np.sum(np.abs(Ceff), axis=1)
+        # if np.max(final_row_sums) > 0.5:  # Safety check
+        #     print(f"⚠️  Warning: row sums still too large: {np.max(final_row_sums):.4f}")
+        #     Ceff *= (0.5 / np.max(final_row_sums))
 
         return Ceff
+
+
+    # def _apply_Ceff_constraints(self, Ceff):
+    #     """Apply structural / sign / normalization constraints to effective connectivity.
+        
+    #     Rules:
+    #     - If competitive_coupling is False: only allow (non‑negative unless allow_negative=True)
+    #       weights where structural C > 0 (keep diagonal at 0). Elsewhere force 0.
+    #     - If competitive_coupling is True: allow positive and negative values on existing
+    #       structural links (still zero where no structural connection). Rows can be
+    #       mean-centered (excluding diagonal) to encourage competition.
+    #     - Always symmetrize to keep the matrix consistent with undirected SC.
+    #     - If Ceff_norm is True: scale globally so max |Ceff| <= self.max_C.
+    #     """
+    #     Ceff = np.array(Ceff, dtype=float, copy=True)
+    #     N = self.n_parcels
+
+    #     # Structural mask (allow on structural links only)
+    #     mask = (self.C > 0)
+    #     # Always keep diagonal controllable separately (set to zero later)
+    #     np.fill_diagonal(mask, False)
+
+    #     if not self.params['competitive_coupling']:
+    #         # Zero where no SC
+    #         Ceff[~mask] = 0.0
+    #         # Clip sign
+    #         if self.params['allow_negative']:
+    #             Ceff = np.clip(Ceff, -self.params['max_C'], self.params['max_C'])
+    #         else:
+    #             Ceff = np.clip(Ceff, 0.0, self.params['max_C'])
+    #     else:
+    #         # Competitive: allow +/- on existing links, zero elsewhere
+    #         Ceff[~mask] = 0.0
+    #         # Optional row mean-centering (excluding diagonal) to promote competition
+    #         for i in range(N):
+    #             row_mask = mask[i]
+    #             if np.any(row_mask):
+    #                 mean_val = Ceff[i, row_mask].mean()
+    #                 Ceff[i, row_mask] -= mean_val
+    #         # Clip
+    #         Ceff = np.clip(Ceff, -self.params['max_C'], self.params['max_C'])
+
+    #     # Symmetrize (assume undirected SC)
+    #     #Ceff = 0.5 * (Ceff + Ceff.T)
+
+    #     # Enforce zero diagonal
+    #     np.fill_diagonal(Ceff, 0.0)
+
+    #     # Global normalization if requested
+    #     if self.params['Ceff_norm']:
+    #         max_abs = np.max(np.abs(Ceff))
+    #         if max_abs > self.params['max_C'] and max_abs > 0:
+    #             Ceff *= (self.params['max_C'] / max_abs)
+
+    #     return Ceff
 
 
 # def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
@@ -744,6 +883,17 @@ def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
     ts_zsc = data['ts'] if ts_zsc is None else ts_zsc
     hopf_params = params['hopfParamsAdam'].copy()
     hopf_params['verbose'] = verbose
+    if ts_zsc.ndim == 2:
+        ts_zsc = ts_zsc[np.newaxis, :, :]
+    ts = ts_zsc[0, :, 5:-5]
+    FC = np.corrcoef(ts)
+    COV = np.cov(ts)
+    FC = 0.5*(FC + COV) # try out, otherwise remove or try to include COVtau
+    np.fill_diagonal(FC, 0.0)
+    normFC = 0.1*(FC - FC.min()) / (FC.max() - FC.min())
+    np.fill_diagonal(normFC, 0.0)
+    
+    SC = normFC
 
     model = LinearHopfModel(
         C=SC, f_diff=f_diff, sigma=sigma_ini, a=a_ini, **hopf_params

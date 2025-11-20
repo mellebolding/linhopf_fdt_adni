@@ -40,7 +40,7 @@ def run_single_fit(t, params, NPARCELLS, DL_type, SC_400):
             mode='constant',
             constant_values=SC_HC_Avg.mean()
         )
-        all_data.extend(load_data_records.load_group_data(DL, group, SC=SC_400))
+        all_data.extend(load_data_records.load_group_data(DL, group, DL_type, SC=SC_400))
         
     TSemp_zsc = zfilterts.prepare_timeseries(all_data, NPARCELLS)
     group_data = load_data_records.prepare_group_data(all_data, NPARCELLS)
@@ -107,7 +107,7 @@ with open("hyperparams.json", "r") as f:
     params = json.load(f)
 
 tau_values = [0, 1.0, 2.0, 3.0, 4.0, 5.0]
-N_REPEATS = 5
+N_REPEATS = 1
 
 # --- DATA STRUCTURE TO STORE RESULTS ---
 plot_data = {

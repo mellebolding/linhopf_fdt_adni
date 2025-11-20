@@ -5,13 +5,13 @@ from src.data_loaders.ADNI_A import loadBurden
 import src.data_loaders.ADNI_B as ADNI_B
 
 
-def load_group_data(DL, group_name, SC=None):
+def load_group_data(DL, group_name, DL_type, SC=None):
     """Load all subjects from one group"""
     subject_ids = DL.get_groupSubjects(group_name)
-    if DL == 'DL_A': 
-        factor = 1/10
-        print('yes')
-    else: factor = 10
+    if DL_type == 'DL_A': 
+        factor = 1
+    else: 
+        factor = 1
     group_data = []
     
     for subject_id in subject_ids:

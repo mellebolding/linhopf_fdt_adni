@@ -20,7 +20,8 @@
         "maxC": 0.2,
         "TR": 3,
         "g": 1,
-        "tau": 1.0
+        "tau": 1.0,
+        "target_row_sum": 0.2
     },
     "Parcel_names": {
     "1": "Right_V1", "2": "Right_MST", "3": "Right_V6", "4": "Right_V2", "5": "Right_V3", "6": "Right_V4", "7": "Right_V8",
