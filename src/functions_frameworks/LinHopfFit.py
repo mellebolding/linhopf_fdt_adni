@@ -875,6 +875,26 @@ class LinearHopfModel:
 #         'FCsim': FCsim,
 #         'COVtauemp': COVtauemp
 #     }
+def _compute_empirical_covtau2(ts, COV):
+        """Compute empirical COV(tau)"""
+        N = COV.shape[0]
+        COVtau = np.zeros((N, N))
+        sigratio = compute_sigratio_from_cov(COV)
+        
+        for i in range(N):
+            for j in range(N):
+                clag = np.correlate(ts[:, i] - ts[:, i].mean(), 
+                                  ts[:, j] - ts[:, j].mean(), 'full')
+                lags = np.arange(-len(ts) + 1, len(ts))
+                valid = (lags >= -1.0) & (lags <= 1.0)
+                clag = clag[valid]
+                lags = lags[valid]
+                
+                idx = np.where(lags == 1.0)[0][0]
+                COVtau[i, j] = clag[idx] / len(ts)
+        
+        COVtau *= sigratio
+        return COVtau
 
 def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
     """Fit model for one subject"""
@@ -888,9 +908,10 @@ def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
     ts = ts_zsc[0, :, 5:-5]
     FC = np.corrcoef(ts)
     COV = np.cov(ts)
-    FC = 0.5*(FC + COV) # try out, otherwise remove or try to include COVtau
+    COVtau = _compute_empirical_covtau2(ts.T, COV)
+    FC = 0.5*(FC + COVtau) # try out, otherwise remove or try to include COVtau
     np.fill_diagonal(FC, 0.0)
-    normFC = 0.1*(FC - FC.min()) / (FC.max() - FC.min())
+    normFC = 0.05*(FC - FC.min()) / (FC.max() - FC.min())
     np.fill_diagonal(normFC, 0.0)
     
     SC = normFC

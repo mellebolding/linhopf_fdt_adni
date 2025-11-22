@@ -58,7 +58,7 @@ def calculate_parcel_variance(
 start_time = time.time()
 
 ### MAIN INPUT PARAMETERS (other parameters from json file)
-DL_type = 'DL_B1'
+DL_type = 'DL_B2'
 NPARCELLS = 400 # max 379
 fit_sigma = True
 fit_a = True

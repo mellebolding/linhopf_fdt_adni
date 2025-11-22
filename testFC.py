@@ -11,7 +11,7 @@ def emp_sim_triangles(DL_type='DL_A', NPARCELLS=40, fit_sigma=True, fit_a=True,
     filename = f"linhopf_fit_{DL_type}_N{NPARCELLS}_sig{fit_sigma}_a{fit_a}.npz"
     linhopf_data = np.load(os.path.join(save_path, filename), allow_pickle=True)
     df = pd.DataFrame({k: linhopf_data[k].tolist() for k in linhopf_data.files})
-    s = 15
+    s = 1
     empirical_fcs = np.stack(df['FCemp'][s:s+n_conditions], axis=0)
     simulated_fcs = np.stack(df['FCsim'][s:s+n_conditions], axis=0)
     print(df['losses'].values)
@@ -176,7 +176,7 @@ def emp_sim_triangles(DL_type='DL_A', NPARCELLS=40, fit_sigma=True, fit_a=True,
     print(DL_type, NPARCELLS, fit_sigma, fit_a, joint_normalization)
     plt.show()
 
-emp_sim_triangles(DL_type='DL_B1', NPARCELLS=20, fit_sigma=True, fit_a=True, 
+emp_sim_triangles(DL_type='DL_B1', NPARCELLS=40, fit_sigma=True, fit_a=True, 
                  joint_normalization=False, n_conditions=4)
 
 # def connectivity_matrices3():
