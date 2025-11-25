@@ -59,6 +59,7 @@ start_time = time.time()
 
 ### MAIN INPUT PARAMETERS (other parameters from json file)
 DL_type = 'DL_B2'
+filt = True
 NPARCELLS = 400 # max 379
 fit_sigma = True
 fit_a = True
@@ -81,11 +82,11 @@ SC_400 = np.pad(
 
 
 if DL_type == 'DL_B1':
-    DL = ADNI_B.ADNI_B_Alt(['HC', 'AD'])
+    DL = ADNI_B.ADNI_B_Alt(['HC', 'AD'],filt=filt)
 if DL_type == 'DL_B2':
-    DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB-)', 'MCI(AB+)', 'AD'])
+    DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB-)', 'MCI(AB+)', 'AD'],filt=filt)
 if DL_type == 'DL_B3':
-    DL = ADNI_B.ADNI_B_Alt(['HC(AB-)', 'HC(AB+)', 'MCI(AB-)', 'MCI(AB+)', 'AD'])
+    DL = ADNI_B.ADNI_B_Alt(['HC(AB-)', 'HC(AB+)', 'MCI(AB-)', 'MCI(AB+)', 'AD'],filt=filt)
 
 all_data = []
 for group in DL.get_groupLabels():
