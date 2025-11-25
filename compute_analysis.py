@@ -1077,14 +1077,14 @@ def radarplot(rsn_means_df: pd.DataFrame, rsn_names: list):
         radialaxis=dict(
         visible=True,
         # === Tick spacing ===
-        dtick=0.02,          # 4 tick steps → gives 5 ticks (0, .25, .50, .75, 1.0)
+        dtick=0.1,          # 4 tick steps → gives 5 ticks (0, .25, .50, .75, 1.0)
         ticklabelstep=1,     # label every tick → 4 "value labels" between min & max
 
         # === Tick styling ===
         tickfont=dict(size=18, color="black", family="Arial"),
 
         # === Optional: explicitly set axis range (helps control ticks) ===
-        range=[0, 0.07],
+        range=[0, 0.9],
 
         showline=True,
         gridcolor="lightgray",
@@ -1121,7 +1121,7 @@ RSN_ORDER_val = ['Vis','SalVentAttn', 'SomMot', 'DorsAttn', 'Limbic', 'Cont', 'D
 GROUPS_ORDER_val = ['HC', 'AD']
 
 
-DL_type = 'DL_B1'
+DL_type = 'DL_B2'
 model_type1 = 'modelfree'  # 'modelfree' or 'modelbased'
 model_type2 = 'modelbased'
 NPARCELLS = 400 # max 379 for DL_A, max 400 for DL_B
@@ -1158,7 +1158,7 @@ print([np.mean(diff) for diff in df_based['diff'][110:115]])
 print([np.mean(diff) for diff in df_based['diff'][10:15]])
 
 
-measure = 'diff'
+measure = 'I_norm2'
 
 
 # #print(df.columns)
@@ -1168,7 +1168,7 @@ measure = 'diff'
 # subject_comparison(df_based, 'ABeta', 'modelbased', NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 # subject_comparison(df_based, 'Tau', 'modelbased', NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 #print(np.max([np.max(arr) for arr in df['ABeta'].values if isinstance(arr, np.ndarray)]))
-# scatter_plot_3d(df_based)
+scatter_plot_3d(df_free)
 # scatter_plot_3d_2(df_based)
 
 
@@ -1250,7 +1250,7 @@ plot_multi_model_comparison_violin(
     # save_path='./plots'  # Uncomment to save
 )
 
-df = df_based
+df = df_free
 plot_ready_df = aggregate_all_rsns_for_plotting(
     df=df,
     measure=measure,

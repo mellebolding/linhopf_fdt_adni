@@ -128,9 +128,9 @@ class ADNI_B_N238rev:
         if filt:
             fMRI_folder = self.base_folder + 'tseries_filt/sch400/'
             if prefiltered_fMRI:
-                self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_IRFSPGR_N238rev.mat'
+                self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_IRFSPGR_sch400_N238rev.mat'
             else:
-                self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_IRFSPGR_N238rev.mat'
+                self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_IRFSPGR_sch400_N238rev.mat'
             self.ID_path = fMRI_folder + 'PTID_ADNI3_{}_MPRAGE_IRFSPGR_all.mat'
         else:
             fMRI_folder = self.base_folder + 'tseries/sch400/'

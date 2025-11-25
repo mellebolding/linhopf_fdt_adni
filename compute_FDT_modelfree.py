@@ -90,7 +90,7 @@ def _analysisFdt_AsymptoticNorm(Cts, Xts, sigma, n_burn_in=None):
     
     if n_burn_in is None:
         # Default burn-in to discard the first third of data
-        n_burn_in = nsteps // 3 
+        n_burn_in = nsteps // 30 
     
     # 1. Steady-state Variance (C^infinity): C(t,t) averaged over steady-state time
     # This is the average of the diagonal C(t,t) after burn-in.
@@ -110,12 +110,6 @@ def _analysisFdt_AsymptoticNorm(Cts, Xts, sigma, n_burn_in=None):
     I_norm_inf = 1.0 - T * (Chi_inf / C_inf)
     
     return I_norm_inf
-
-# Example Usage: (Assuming you run the simulation and split the signal)
-# C, R, I, I_norm2, X_norm2 = _analysisFdt2(x, eta, sigma, dt, normalize=True)
-# I_norm_inf = _analysisFdt_AsymptoticNorm(C, X_norm2, sigma)
-# print(f"Asymptotic Normalized FDT Violation (I-bar-infinity): {I_norm_inf}")
-
 
 DL_type = 'DL_B2'
 filt = True
