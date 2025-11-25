@@ -176,7 +176,7 @@ def emp_sim_triangles(DL_type='DL_A', NPARCELLS=40, fit_sigma=True, fit_a=True,
     print(DL_type, NPARCELLS, fit_sigma, fit_a, joint_normalization)
     plt.show()
 
-emp_sim_triangles(DL_type='DL_B1', NPARCELLS=40, fit_sigma=True, fit_a=True, 
+emp_sim_triangles(DL_type='DL_B1', NPARCELLS=400, fit_sigma=True, fit_a=True, 
                  joint_normalization=False, n_conditions=4)
 
 # def connectivity_matrices3():

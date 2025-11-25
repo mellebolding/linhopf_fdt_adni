@@ -92,7 +92,7 @@ def _analysisFdt2(x, eta, sigma, dt, normalize=True):
     :param normalize: if True, return normalized I and X matrices
     :return: the three matrices Cts, Rts, Its (and optionally I_norm2, X_norm2)
     """
-    T = sigma ** 2 / 2.
+    T = (sigma ** 2) / 2.
     nsim, nsteps = x.shape
     Cts = np.zeros((nsteps, nsteps))
     Rts = np.zeros((nsteps, nsteps))
@@ -122,7 +122,7 @@ def _analysisFdt2(x, eta, sigma, dt, normalize=True):
         Ctt = np.diag(Cts)  # Shape: (nsteps,)
         
         # Normalize I: I_norm2(t,s) = I(t,s) / C(t,t)
-        I_norm2 = Its / Ctt[:, np.newaxis]
+        I_norm2 = Its / (2*Ctt[:, np.newaxis])
         
         # Normalize X: X_norm2(t,s) = sigma^2 * X(t,s) / (2*C(t,t))
         X_norm2 = (sigma ** 2 * Xts) / (2 * Ctt[:, np.newaxis])

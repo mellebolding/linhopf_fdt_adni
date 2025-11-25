@@ -32,7 +32,7 @@ import src.utils.hdf as hdf
 # ================================================================================================================
 class ADNI_B_N238rev:
     def __init__(self, path=None,
-                 prefiltered_fMRI=False,
+                 prefiltered_fMRI=False, filt=None,
                  # ADNI_version='N238rev',  # N238rev
                  # SchaeferSize=400,  # by default, let's use the Schaefer2018 400 parcellation
                  ):
@@ -40,14 +40,14 @@ class ADNI_B_N238rev:
         # self.ADNI_version = ADNI_version
         self.groups = ['HC','MCI', 'AD']
         if path is not None:
-            self.set_basePath(path, prefiltered_fMRI)
+            self.set_basePath(path, prefiltered_fMRI, filt)
         else:
-            self.set_basePath('./data/', prefiltered_fMRI)
+            self.set_basePath('./data/', prefiltered_fMRI, filt)
         #     self.set_basePath(WorkBrainDataFolder, prefiltered_fMRI)
         self.timeseries = {}
         self.burdens = {}
         self.meta_information = None
-        self.__loadAllData()
+        self.__loadAllData(filt=filt)
         # ---------- discard all subjects with AD and ABeta-, because they are not subjects with dementia by AD...
         self.discardSubjects(['116_S_6543','168_S_6754','022_S_6013'])#,'126_S_6721'])
 
@@ -85,36 +85,60 @@ class ADNI_B_N238rev:
         print(f'     Union ({len(union)}): {union}')
         return res
 
-    def __loadAllData(self, # SchaeferSize,
-                      ):
-        for task in self.groups:
-            print(f'----------- Checking: {task} --------------')
-            taskRealName = task
-            ID_path = self.ID_path.format(taskRealName)
-            fMRI_task_path = self.fMRI_path.format(taskRealName)
-            PTIDs = hdf.loadmat(ID_path)
-            PTID_KEY = f'combined_PTIDS_ADNI3_{task}_MPRAGE'
-            if task == 'MCI': PTID_KEY = 'PTID_BIDS_MPRAGE_60_89_batch_1_MCI'
-            PTIDs = PTIDs[PTID_KEY]
-            IDs = [id[0] for id in np.squeeze(PTIDs).tolist()]
-            self.timeseries[task] = self.__loadSubjects_fMRI(IDs, fMRI_task_path)
-            self.burdens[task] = self.__loadSubjects_burden(IDs)
-            print(f'----------- done {task} --------------')
-        meta_data_path = self.base_folder + 'ADNI3_N238rev_with_ABETA_Status.xlsx'
-        self.meta_information = pd.read_excel(meta_data_path)
-        print(f'----------- done loading All --------------')
+    def __loadAllData(self, filt=None):
+
+        if filt is not None:
+            for task in self.groups:
+                print(f'----------- Checking: {task} --------------')
+                taskRealName = task
+                ID_path = self.ID_path.format(taskRealName)
+                fMRI_task_path = self.fMRI_path.format(taskRealName)
+                PTIDs = hdf.loadmat(ID_path)
+                PTIDs = PTIDs['PTID']
+                IDs = [id[0] for id in np.squeeze(PTIDs).tolist()]
+                self.timeseries[task] = self.__loadSubjects_fMRI(IDs, fMRI_task_path)
+                self.burdens[task] = self.__loadSubjects_burden(IDs)
+                print(f'----------- done {task} --------------')
+            meta_data_path = self.base_folder + 'ADNI3_N238rev_with_ABETA_Status.xlsx'
+            self.meta_information = pd.read_excel(meta_data_path)
+            print(f'----------- done loading All --------------')
+        else:
+            for task in self.groups:
+                print(f'----------- Checking: {task} --------------')
+                taskRealName = task
+                ID_path = self.ID_path.format(taskRealName)
+                fMRI_task_path = self.fMRI_path.format(taskRealName)
+                PTIDs = hdf.loadmat(ID_path)
+                PTID_KEY = f'combined_PTIDS_ADNI3_{task}_MPRAGE'
+                if task == 'MCI': PTID_KEY = 'PTID_BIDS_MPRAGE_60_89_batch_1_MCI'
+                PTIDs = PTIDs[PTID_KEY]
+                IDs = [id[0] for id in np.squeeze(PTIDs).tolist()]
+                self.timeseries[task] = self.__loadSubjects_fMRI(IDs, fMRI_task_path)
+                self.burdens[task] = self.__loadSubjects_burden(IDs)
+                print(f'----------- done {task} --------------')
+            meta_data_path = self.base_folder + 'ADNI3_N238rev_with_ABETA_Status.xlsx'
+            self.meta_information = pd.read_excel(meta_data_path)
+            print(f'----------- done loading All --------------')
 
     def name(self):
         return 'ADNI_B_N238rev'
 
-    def set_basePath(self, path, prefiltered_fMRI):
+    def set_basePath(self, path, prefiltered_fMRI, filt):
         self.base_folder = path + "ADNI-B_DATA/N238rev/"
-        fMRI_folder = self.base_folder + 'tseries/sch400/'
-        if prefiltered_fMRI:
-            self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_batches123_sch400_matching_QC_COMBINED.mat'
+        if filt:
+            fMRI_folder = self.base_folder + 'tseries_filt/sch400/'
+            if prefiltered_fMRI:
+                self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_IRFSPGR_N238rev.mat'
+            else:
+                self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_IRFSPGR_N238rev.mat'
+            self.ID_path = fMRI_folder + 'PTID_ADNI3_{}_MPRAGE_IRFSPGR_all.mat'
         else:
-            self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_batches123_sch400_matching_QC_COMBINED.mat'
-        self.ID_path = fMRI_folder + 'combined_PTIDS_ADNI3_{}_MPRAGE.mat'
+            fMRI_folder = self.base_folder + 'tseries/sch400/'
+            if prefiltered_fMRI:
+                self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_batches123_sch400_matching_QC_COMBINED.mat'
+            else:
+                self.fMRI_path = fMRI_folder + 'tseries_ADNI3_{}_MPRAGE_batches123_sch400_matching_QC_COMBINED.mat'
+            self.ID_path = fMRI_folder + 'combined_PTIDS_ADNI3_{}_MPRAGE.mat'
         self.ABeta_path = self.base_folder + 'abeta_wc_pvc/'
         self.tau_path = self.base_folder + 'tau_igm_pvc/'
 
@@ -178,8 +202,8 @@ class ADNI_B_N238rev:
 # ================================================================================================================
 class ADNI_B_Alt:
     def __init__(self, new_classification, path=None,
-                 prefiltered_fMRI=False,):
-        self.DL = ADNI_B_N238rev(path, prefiltered_fMRI=prefiltered_fMRI)
+                 prefiltered_fMRI=False,filt=None):
+        self.DL = ADNI_B_N238rev(path, prefiltered_fMRI=prefiltered_fMRI,filt=filt)
         self.groups = new_classification
         self.classification = {}
         orig_classification = self.DL.get_classification()

@@ -14,6 +14,129 @@ from src.analysis import statannotations_permutation
 
 fontSize = 10
 
+def plot_split_violin_ranksum(group_measure_data, columnLables, graphLabel, y_axis_label='Value', 
+                                     groups_order=None, palette=None, save_path=None, dpi=300):
+    """
+    Generates a single, split violin plot comparing two groups (HC vs. AD) 
+    on a single X-axis labeled 'Subjects', including rank-sum significance.
+    """
+    
+    # --- Data Restructuring ---
+    all_data = []
+    
+    # Create the data in long format, assigning the fixed X-axis category 'Subjects'
+    for group_label in columnLables:
+        if group_label in group_measure_data:
+            df_group = pd.DataFrame({
+                'value': group_measure_data[group_label], 
+                'Group_Cond': group_label,  # The splitting variable (hue)
+                'X_Category': 'Subjects'    # The fixed X-axis category
+            })
+            all_data.append(df_group)
+
+    data = pd.concat(all_data, ignore_index=True)
+    
+    labels = [l for l in columnLables if l in group_measure_data]
+    
+    if len(labels) != 2:
+        raise ValueError("This function is strictly for comparing exactly two groups (e.g., HC vs. AD) on one axis.")
+
+    # --- Specialized Split Violin Plot Logic ---
+    groups_order = labels 
+    
+    # Prepare the palette 
+    if palette is None:
+        # Using colors inspired by your image (Green/Teal)
+        palette = {
+            groups_order[0]: '#8BC34A', # Light Green
+            groups_order[1]: '#1ABC9C'  # Dark Green/Teal
+        }
+    
+    fig, ax = plt.subplots(figsize=(4, 6)) # Adjust width for single axis
+    sns.set_context('notebook', font_scale=1.0)
+    
+    # 1. Split Violin Plot (Key: split=True and fixed X-axis label)
+    sns.violinplot(
+        y="value",
+        x="X_Category",
+        hue="Group_Cond",
+        data=data,
+        order=['Subjects'], 
+        hue_order=groups_order,
+        palette=palette,
+        split=True,         # Makes the two distributions touch
+        inner='quartile',   # Adds the black bars for median/quartiles
+        linewidth=0.8,
+        ax=ax
+    )
+    
+    # 2. Add Individual Data Points (The scatter/swarm points)
+    sns.stripplot(
+        y="value",
+        x="X_Category",
+        hue="Group_Cond",
+        data=data,
+        order=['Subjects'],
+        hue_order=groups_order,
+        palette=palette,
+        edgecolor='gray',
+        linewidth=0.4,
+        s=3,
+        jitter=0.2,
+        alpha=0.6,
+        ax=ax,
+        dodge=True # Aligns dots correctly with the split violins
+    )
+
+    # Remove one of the legends added by the stripplot/violinplot overlap
+    handles, labels_leg = ax.get_legend_handles_labels()
+    ax.legend(handles[0:len(groups_order)], labels_leg[0:len(groups_order)], 
+              loc='upper right', title=None, frameon=True)
+              
+    ax.set_xlabel('X_Category') # Label the X-axis (will be 'Subjects')
+    ax.set_title(graphLabel)
+    ax.set_ylabel(y_axis_label)
+    
+    # --- Significance Annotation ---
+    max_y = 1.25*data['value'].max()
+    min_y = 1.25*data['value'].min()
+    y_range = max_y - min_y
+    y_increment = y_range * 0.03 if y_range > 0 else 0.1
+    #y_increment = 0.1
+    yposition = max_y + (y_increment * 1.3)
+    
+    # Only one pair to test: the two groups
+    group1 = data[data['Group_Cond'] == groups_order[0]]['value']
+    group2 = data[data['Group_Cond'] == groups_order[1]]['value']
+    
+    # Wilcoxon Rank-Sum test
+    p_value = stats.ranksums(group1, group2).pvalue
+    
+    sig = '***' if p_value < 0.001 else \
+          '**' if p_value < 0.01 else \
+          '*' if p_value < 0.05 else \
+          'n.s.' 
+    
+    # Find the central position for the marker (index 0 for the 'Subjects' column)
+    idx_center = 0
+    
+    # Draw line above the single column
+    #ax.plot([idx_center - 0.15, idx_center + 0.15], [yposition, yposition], color='black', lw=1)
+    
+    # Place significance marker
+    ax.text(idx_center, yposition - (y_increment * 1), sig,
+            ha='center', va='bottom', color='black', fontsize=14)
+    
+    # Adjust Y-axis limit for markers
+    ax.set_ylim(top=yposition + y_increment)
+    
+    # Final save
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=dpi)
+    plt.show()
+    plt.close(fig)
+
 
 # --------------------------------------------------------------------------------------
 # Simply avg and Std Dev printing function...
@@ -281,19 +404,19 @@ def plotComparisonAcrossLabels_ranksum(data_dict, columnLables, graphLabel, y_ax
     ], ignore_index=True)
 
     labels = [l for l in columnLables if l in data_dict]
-    default_color_map = {'HC': '#1f77b4', 'MCI': '#ff7f0e', 'AD': '#2ca02c'}
+    default_color_map = {'HC': '#8BC34A', 'MCI(AB-)': '#ff7f0e', 'MCI(AB+)': "#c34023", 'AD': '#1ABC9C'}
     tab10 = sns.color_palette('tab10')
     palette_list = [default_color_map.get(label, tab10[i % len(tab10)]) for i, label in enumerate(columnLables)]
     palette = dict(zip(columnLables, palette_list))
     sns.boxplot(y="value", x="cond", data=data, ax=ax, order=labels, palette=palette, linewidth=1)
-    sns.swarmplot(y="value", x="cond", data=data, ax=ax, order=labels, size=3, color=".25")
+    sns.swarmplot(y="value", x="cond", data=data, ax=ax, order=labels, size=4, color=".25")
     
     pairs = [(labels[i], labels[j]) for i in range(len(labels)) for j in range(i+1, len(labels))]
     
     max_y = data['value'].max()
     min_y = data['value'].min()
     y_range = max_y - min_y
-    y_increment = y_range * 0.05 if y_range > 0 else 0.1
+    y_increment = y_range * 0.07 if y_range > 0 else 0.1
     yposition = max_y + (y_increment * 1.5)
     
     # (Wilcoxon Rank-Sum)
@@ -306,20 +429,30 @@ def plotComparisonAcrossLabels_ranksum(data_dict, columnLables, graphLabel, y_ax
             
             sig = '***' if p_value < 0.001 else \
                   '**' if p_value < 0.01 else \
-                  '*' if p_value < 0.05 else \
-                  'n.s.'
-            
+                  '*' if p_value < 0.05 else None
+
             idx1, idx2 = labels.index(pair[0]), labels.index(pair[1])
-            ax.plot([idx1, idx2], [yposition, yposition], color='black', lw=1)
-            ax.text((idx1 + idx2) / 2, yposition + (y_increment * 0.2), sig,
+            if sig is not None: 
+                ax.plot([idx1, idx2], [yposition, yposition], color='black', lw=1)
+                ax.text((idx1 + idx2) / 2, yposition + (y_increment * 0.03), sig,
                     ha='center', va='bottom', color='black', fontsize=10)
-            yposition += y_increment # Increment y position for the next line
+                yposition += y_increment # Increment y position for the next line
 
     ax.set_ylim(min_y * 0.95, yposition + y_increment) 
     ax.set_xlabel('')
-    ax.set_ylabel(y_axis_label)
+    
+    ax.set_ylabel('Amyloid-Beta centiloids', fontsize=13)
     ax.set_title(graphLabel) # Renamed to graphLabel
     ax.set_xticklabels(labels) # Set the labels for the x-axis
+    ax.tick_params(axis='y', length=0) 
+    ax.tick_params(axis='x', length=0)
+    fontSize = 13
+    ax.tick_params(axis='x', labelsize=fontSize)
+    ax.tick_params(axis='y', labelsize=fontSize)
+    ax.spines['left'].set_linewidth(0.8)
+    ax.spines['bottom'].set_linewidth(0.8)
+    ax.spines['top'].set_linewidth(0.8)
+    ax.spines['right'].set_linewidth(0.8)
     
     if h_line is not None:
         ax.axhline(h_line, color='red', linestyle='--', linewidth=1, zorder=0, alpha=0.7)
@@ -425,6 +558,12 @@ def subject_comparison_rsn(df, measure, rsn_name, model_type, NPARCELLS, fit_sig
         y_axis_label=f'Subject {measure}{y_label_suffix}',
         save_path=os.path.join(save_path_plot, figure_name + '.png')
     )
+    # plot_split_violin_ranksum(
+    #     group_measure,
+    #     columnLables=group_labels,
+    #     graphLabel=figure_name,
+    #     y_axis_label=f'Subject {measure}{y_label_suffix}'
+    # )
     
     return group_measure
 

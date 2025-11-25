@@ -53,13 +53,25 @@ def loadProteins(df, DL_type, protein, repo_root):
         group_means = df.groupby('group')[protein].agg(lambda x: np.mean(np.stack(x.dropna().tolist()), axis=0))
         nan_mask = df[protein].isna()
         df.loc[nan_mask, protein] = df.loc[nan_mask, 'group'].map(group_means)
-    if DL_type == 'DL_B':
+    if DL_type == 'DL_B1':
         if protein == 'Amyloid':
             protein = 'ABeta'
         DL = ADNI_B.ADNI_B_Alt(['HC', 'AD'])
         HC_IDs = DL.get_groupSubjects('HC')
         AD_IDs = DL.get_groupSubjects('AD')
         df[protein] = [DL.get_subjectData(subID)[subID][protein] if subID in HC_IDs + AD_IDs else np.nan for subID in df['subject_id']]
+        group_means = df.groupby('group')[protein].agg(lambda x: np.mean(np.stack(x.dropna().tolist()), axis=0))
+        nan_mask = df[protein].isna()
+        df.loc[nan_mask, protein] = df.loc[nan_mask, 'group'].map(group_means)
+    if DL_type == 'DL_B2':
+        if protein == 'Amyloid':
+            protein = 'ABeta'
+        DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB-)', 'MCI(AB+)', 'AD'])
+        HC_IDs = DL.get_groupSubjects('HC')
+        MCI_AB_minus_IDs = DL.get_groupSubjects('MCI(AB-)')
+        MCI_AB_plus_IDs = DL.get_groupSubjects('MCI(AB+)')
+        AD_IDs = DL.get_groupSubjects('AD')
+        df[protein] = [DL.get_subjectData(subID)[subID][protein] if subID in HC_IDs + MCI_AB_minus_IDs + MCI_AB_plus_IDs + AD_IDs else np.nan for subID in df['subject_id']]
         group_means = df.groupby('group')[protein].agg(lambda x: np.mean(np.stack(x.dropna().tolist()), axis=0))
         nan_mask = df[protein].isna()
         df.loc[nan_mask, protein] = df.loc[nan_mask, 'group'].map(group_means)

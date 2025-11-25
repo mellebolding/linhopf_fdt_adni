@@ -4,7 +4,7 @@ import pandas as pd
 from src.functions_frameworks.functions_FDT_norm2 import I_norm2, X_norm2
 
 DL_type = 'DL_B1'
-NPARCELLS = 20  # max 379
+NPARCELLS = 400 # max 379
 fit_sigma = True
 fit_a = True
 
