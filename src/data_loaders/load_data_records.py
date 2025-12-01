@@ -44,7 +44,7 @@ def prepare_group_data(all_data, NPARCELLS):
         }
     return group_data
 
-def loadProteins(df, DL_type, protein, repo_root):
+def loadProteins(df, DL_type, protein, repo_root,filt=False):
     "protein must be 'Tau' or 'Amyloid'"
     protein = f'{protein}'
     if DL_type == 'DL_A':
@@ -66,7 +66,7 @@ def loadProteins(df, DL_type, protein, repo_root):
     if DL_type == 'DL_B2':
         if protein == 'Amyloid':
             protein = 'ABeta'
-        DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB-)', 'MCI(AB+)', 'AD'])
+        DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB-)', 'MCI(AB+)', 'AD'], filt=filt)
         HC_IDs = DL.get_groupSubjects('HC')
         MCI_AB_minus_IDs = DL.get_groupSubjects('MCI(AB-)')
         MCI_AB_plus_IDs = DL.get_groupSubjects('MCI(AB+)')

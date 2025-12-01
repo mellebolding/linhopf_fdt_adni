@@ -87,7 +87,7 @@ class ADNI_B_N238rev:
 
     def __loadAllData(self, filt=None):
 
-        if filt is not None:
+        if filt:
             for task in self.groups:
                 print(f'----------- Checking: {task} --------------')
                 taskRealName = task

@@ -443,7 +443,7 @@ class LinearHopfModel:
             'patience': kwargs.get('patience', 4),
             'iter_check': kwargs.get('iter_check', 50),
             'verbose': kwargs.get('verbose', True),
-            'loss_weights': kwargs.get('loss_weights', {'mse_fc': 0.5, 'mse_covtau': 0.5}),
+            'loss_weights': kwargs.get('loss_weights', {'mse_fc': 0.25, 'mse_covtau': 0.25, 'corr_fc': 0.25, 'corr_covtau': 0.25}),
             'fit_sigma': kwargs.get('fit_sigma', False),
             'fit_a': kwargs.get('fit_a', False),
             'TR': kwargs.get('TR', 3.0),
