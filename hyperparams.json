@@ -3,10 +3,10 @@
         "competitive_coupling": false,
         "allow_negative": false,
         "loss_weights": {
-            "mse_fc": 0.25,
-            "mse_covtau": 0.25,
-            "corr_fc": 0.25,
-            "corr_covtau": 0.25
+            "mse_fc": 0.1,
+            "mse_covtau": 0.1,
+            "corr_fc": 0.40,
+            "corr_covtau": 0.40
         },
         "lr_Ceff": 1e-4,
         "lr_sigma": 1e-4,

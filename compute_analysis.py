@@ -1,4 +1,5 @@
 import os
+from matplotlib.ticker import FixedLocator, MaxNLocator
 import numpy as np
 import pandas as pd
 from src.data_loaders.load_data_records import loadProteins
@@ -493,6 +494,383 @@ def plot_multi_model_comparison_violin(model_data_dicts: dict, groups_order: lis
     plt.show()
     plt.close(fig)
 
+def plot_violin_groups_with_significance(
+    df_data,
+    measure_col_name: str,
+    group_col_name: str = 'group',
+    comparisons: list = None,
+    measure_display_name: str = None,
+    y_label_override: str = None,
+    palette: dict = None,
+    dpi: int = 300,
+    save_path: str = None,
+    save_prefix: str = 'GroupViolinComparison'
+):
+    """
+    Single violin plot with one instance per group and pairwise Wilcoxon rank-sum
+    significance bars with stars.
+    """
+
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from scipy.stats import ranksums, mannwhitneyu
+    import os
+
+    # -------------------------
+    # Defaults
+    # -------------------------
+    if comparisons is None:
+        comparisons = [('HC', 'MCI(AB+)'), ('HC', 'AD'), ('MCI(AB+)', 'AD')]
+
+    if measure_display_name is None:
+        measure_display_name = measure_col_name
+
+    if palette is None:
+        palette = {
+            'HC': '#8BC34A',
+            'MCI(AB+)': "#c34023",
+            'AD': '#1ABC9C'
+        }
+
+    # -------------------------
+    # Subject-level averaging
+    # -------------------------
+    
+    df = df_data.copy()
+    groups_to_keep = ["HC", "MCI(AB+)", "AD"]
+    df = df[df['group'].isin(groups_to_keep)].copy() 
+    sample_value = df[measure_col_name].iloc[0]
+
+    if isinstance(sample_value, (list, np.ndarray)):
+        df[measure_col_name] = df[measure_col_name].apply(
+            lambda x: np.nanmean(np.array(x).flatten())
+        )
+
+    df = df[[group_col_name, measure_col_name]].dropna()
+    df.columns = ['Group', 'Value']
+    df['Group'] = df['Group'].astype(str)
+    df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
+    df = df.dropna()
+
+    group_order = df['Group'].unique().tolist()
+
+    print("\nGroups used:", group_order)
+
+    # -------------------------
+    # Plot
+    # -------------------------
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.set_context('notebook', font_scale=1.0)
+    group_counts = df.groupby('Group')['Value'].count()
+    
+    # 2. Create the new labels (e.g., "HC (N=50)")
+    new_xlabels = [
+        f"{group}\n(N={group_counts[group]})"
+        for group in group_order
+    ]
+
+    sns.violinplot(
+        data=df,
+        x='Group',
+        y='Value',
+        hue='Group',
+        order=group_order,
+        hue_order=group_order,
+        palette=palette,
+        inner='quartile',
+        linewidth=0.8,
+        ax=ax,
+        legend=False
+    )
+
+    sns.stripplot(
+        data=df,
+        x='Group',
+        y='Value',
+        hue='Group',
+        order=group_order,
+        edgecolor='black',
+        s=3,
+        alpha=0.6,
+        jitter=0.2,
+        linewidth=0.7,
+        palette=palette,
+        dodge=False,
+        ax=ax,
+        legend=False
+    )
+    ax.set_xticklabels(new_xlabels, fontsize=14)
+    ax.tick_params(axis='y', length=0) 
+    ax.tick_params(axis='x', length=0)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['left'].set_linewidth(0.8)
+    ax.spines['bottom'].set_linewidth(0.8)
+    ylabel = y_label_override if y_label_override else f'{measure_display_name}'
+    # from matplotlib.lines import Line2D
+    # legend_handles = [
+    #     Line2D([0], [0], marker='o', color='w', 
+    #            markerfacecolor=palette[group], 
+    #            markersize=10, 
+    #            markeredgecolor='black', 
+    #            markeredgewidth=0.7)
+    #     for group in group_order
+    # ]
+    # legend_labels = group_order # Use the original group names for the legend
+
+    # ax.legend(legend_handles, legend_labels, 
+    #           loc='upper right', title=None, frameon=True)
+
+    ax.set_title("", fontsize=14, pad=15)
+    ax.set_ylabel(ylabel, fontsize=14)
+    ax.set_xlabel('', fontsize=12)
+
+    
+
+    y_max = df['Value'].max()
+    y_min = df['Value'].min()
+    y_range = y_max - y_min
+    base_height = y_max + 0.08 * y_range
+
+    for i, (g1, g2) in enumerate(comparisons):
+
+        vals1 = df[df['Group'] == g1]['Value'].values
+        vals2 = df[df['Group'] == g2]['Value'].values
+
+        stat, p_val = ranksums(vals1, vals2)
+        u_stat, _ = mannwhitneyu(vals1, vals2, alternative='two-sided')
+
+        n1, n2 = len(vals1), len(vals2)
+        effect_size = 1 - (2 * u_stat) / (n1 * n2)
+
+        sig = '***' if p_val < 0.001 else \
+              '**' if p_val < 0.01 else \
+              '*' if p_val < 0.05 else ''
+
+        x1 = group_order.index(g1)
+        x2 = group_order.index(g2)
+
+        y = base_height + i * 0.08 * y_range
+
+        if sig is not '':
+            plt.plot([x1, x1, x2, x2],
+                 [y, y + 0.02*y_range, y + 0.02*y_range, y],
+                 lw=1.2, color='black')
+
+        plt.text((x1 + x2) / 2,
+                 y + 0.025*y_range,
+                 sig,
+                 ha='center',
+                 va='bottom',
+                 fontsize=13)
+
+    # -------------------------
+    # Save
+    # -------------------------
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        fname = os.path.join(save_path, f"{save_prefix}_{measure_col_name}.png")
+        plt.savefig(fname, dpi=dpi, bbox_inches='tight')
+        print(f"\nSaved to: {fname}")
+
+    plt.tight_layout()
+    plt.show()
+    plt.close(fig)
+
+def plot_violin_groups_with_significance_parcel_mean(
+    df_data,
+    measure_col_name: str,
+    group_col_name: str = 'group',
+    parcel_col_name: str = 'parcel',   # <<< REQUIRED
+    comparisons: list = None,
+    measure_display_name: str = None,
+    y_label_override: str = None,
+    palette: dict = None,
+    dpi: int = 300,
+    save_path: str = None,
+    save_prefix: str = 'GroupViolinComparison_PARCEL_MEAN',
+    n_permutations: int = 10000
+):
+    """
+    Parcel-MEAN violin plot with permutation-test significance bars.
+    Exactly 1 value per parcel per group (e.g. 400 values per group).
+    """
+
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import os
+
+    # -------------------------
+    # Defaults
+    # -------------------------
+    if comparisons is None:
+        comparisons = [('HC', 'MCI(AB+)'), ('HC', 'AD'), ('MCI(AB+)', 'AD')]
+
+    if measure_display_name is None:
+        measure_display_name = measure_col_name
+
+    if palette is None:
+        palette = {
+            'HC': '#8BC34A',
+            'MCI(AB+)': "#c34023",
+            'AD': '#1ABC9C'
+        }
+
+    # -------------------------
+    # Group filtering
+    # -------------------------
+    df = df_data.copy()
+    groups_to_keep = ["HC", "MCI(AB+)", "AD"]
+    df = df[df[group_col_name].isin(groups_to_keep)].copy()
+
+    sample_value = df[measure_col_name].iloc[0]
+
+    if isinstance(sample_value, (list, np.ndarray)):
+        # Create parcel index BEFORE exploding
+        df = df.copy()
+        df['parcel'] = df[measure_col_name].apply(lambda x: list(range(len(x))))
+        df = df.explode([measure_col_name, 'parcel'])
+
+    df[measure_col_name] = pd.to_numeric(df[measure_col_name], errors='coerce')
+    df = df.dropna(subset=[measure_col_name])
+
+    df_parcel_mean = (
+        df
+        .groupby([group_col_name, parcel_col_name])[measure_col_name]
+        .mean()
+        .reset_index()
+    )
+
+    df_parcel_mean.columns = ['Group', 'Parcel', 'Value']
+
+    #group_order = df_parcel_mean['Group'].unique().tolist()
+    group_order = [g for g in groups_to_keep if g in df[group_col_name].unique()]
+
+
+    print("\nGroups used (PARCEL MEAN LEVEL):", group_order)
+    print("\nParcels per group:")
+    print(df_parcel_mean.groupby('Group')['Value'].count())
+
+    # -------------------------
+    # Plot
+    # -------------------------
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.set_context('notebook', font_scale=1.0)
+
+    new_xlabels = [
+        f"{group}\n(N={df_parcel_mean[df_parcel_mean['Group'] == group]['Value'].shape[0]})"
+        for group in group_order
+    ]
+
+    sns.violinplot(
+        data=df_parcel_mean,
+        x='Group',
+        y='Value',
+        hue='Group',
+        order=group_order,
+        hue_order=group_order,
+        palette=palette,
+        inner='quartile',
+        linewidth=0.8,
+        ax=ax,
+        legend=False
+    )
+
+    sns.stripplot(
+        data=df_parcel_mean,
+        x='Group',
+        y='Value',
+        hue='Group',
+        order=group_order,
+        edgecolor='black',
+        s=3,
+        alpha=0.6,
+        jitter=0.2,
+        linewidth=0.7,
+        palette=palette,
+        dodge=False,
+        ax=ax,
+        legend=False
+    )
+
+    ax.set_xticklabels(new_xlabels, fontsize=14)
+    ax.tick_params(axis='y', length=0)
+    ax.tick_params(axis='x', length=0)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['left'].set_linewidth(0.8)
+    ax.spines['bottom'].set_linewidth(0.8)
+
+    ylabel = y_label_override if y_label_override else f'{measure_display_name}'
+    ax.set_ylabel(ylabel, fontsize=14)
+    ax.set_xlabel('', fontsize=12)
+    ax.set_title("", fontsize=14, pad=15)
+
+    y_max = df_parcel_mean['Value'].max()
+    y_min = df_parcel_mean['Value'].min()
+    y_range = y_max - y_min
+    base_height = y_max + 0.08 * y_range
+
+    print("\n=== Permutation Test Results (PARCEL MEANS) ===")
+
+    for i, (g1, g2) in enumerate(comparisons):
+
+        vals1 = df_parcel_mean[df_parcel_mean['Group'] == g1]['Value'].values
+        vals2 = df_parcel_mean[df_parcel_mean['Group'] == g2]['Value'].values
+
+        p_val = permutation_test(
+            vals1,
+            vals2,
+            n_permutations=n_permutations
+        )
+
+        print(f"{g1} vs {g2}: p={p_val:.5f} "
+              f"(n1={len(vals1)}, n2={len(vals2)}, {n_permutations} permutations)")
+
+        sig = '***' if p_val < 0.001 else \
+              '**' if p_val < 0.01 else \
+              '*' if p_val < 0.05 else ''
+
+        x1 = group_order.index(g1)
+        x2 = group_order.index(g2)
+
+        y = base_height + i * 0.08 * y_range
+
+        if sig != '':
+            ax.plot(
+                [x1, x1, x2, x2],
+                [y, y + 0.02*y_range, y + 0.02*y_range, y],
+                lw=1.2,
+                color='black'
+            )
+
+        ax.text(
+            (x1 + x2) / 2,
+            y + 0.025 * y_range,
+            sig,
+            ha='center',
+            va='bottom',
+            fontsize=13
+        )
+
+    # -------------------------
+    # Save
+    # -------------------------
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        fname = os.path.join(save_path, f"{save_prefix}_{measure_col_name}.png")
+        plt.savefig(fname, dpi=dpi, bbox_inches='tight')
+        print(f"\nSaved to: {fname}")
+
+    plt.tight_layout()
+    plt.show()
+    plt.close(fig)
+
+
 
 def plot_multi_rsn_split_violin(plot_df: pd.DataFrame, rsn_order: list, groups_order: list, 
                           measure_name: str, y_label_override=None, 
@@ -523,9 +901,20 @@ def plot_multi_rsn_split_violin(plot_df: pd.DataFrame, rsn_order: list, groups_o
             groups_order[0]: '#8BC34A',  # Light Green
             groups_order[1]: '#1ABC9C'   # Dark Green
         }
-    
+    parcel_rsn_map = df['parcel_RSNs'].iloc[0]
+
+    rsn_order = plot_df['RSN'].unique().tolist()
+    rsn_parcel_counts = {}
+    for rsn_name in rsn_order:
+        count = parcel_rsn_map.count(rsn_name)
+        rsn_parcel_counts[rsn_name] = count
+    new_xlabels = [
+        f"{rsn}\n(N={rsn_parcel_counts[rsn]})"
+        for rsn in rsn_order
+    ]
     fig, ax = plt.subplots(figsize=(12, 6))
     sns.set_context('notebook', font_scale=1.0)
+
     
     # 1. Create the Split Violin Plot
     sns.violinplot(
@@ -559,7 +948,7 @@ def plot_multi_rsn_split_violin(plot_df: pd.DataFrame, rsn_order: list, groups_o
         ax=ax,
         dodge=True
     )
-    
+    ax.set_xticklabels(new_xlabels)
     ax.tick_params(axis='y', length=0) 
     ax.tick_params(axis='x', length=0)
     ax.spines['right'].set_visible(False)
@@ -630,19 +1019,24 @@ def scatter_plot_3d(df):
     import pandas as pd
     from mpl_toolkits.mplot3d import Axes3D
     from scipy.stats import gaussian_kde 
-
-    # --- 0. Setup and Data Aggregation ---
+    groups_to_keep = ["HC", "MCI(AB+)", "AD"]
+    df = df[df['group'].isin(groups_to_keep)].copy() 
+    
     group_means = pd.DataFrame({
         "ABeta":   df.groupby("group")["ABeta"].apply(lambda x: np.vstack(x).mean(axis=0)),
         "Tau":     df.groupby("group")["Tau"].apply(lambda x: np.vstack(x).mean(axis=0)),
         "I_norm2": df.groupby("group")["I_norm2"].apply(lambda x: np.vstack(x).mean(axis=0)),
     })
-    groups = group_means.index.tolist()
+    # group_means = pd.DataFrame({
+    #     "ABeta":   df.groupby("group")["ABeta"].apply(lambda x: np.vstack(x)),
+    #     "Tau":     df.groupby("group")["Tau"].apply(lambda x: np.vstack(x)),
+    #     "I_norm2": df.groupby("group")["I_norm2"].apply(lambda x: np.vstack(x)),
+    # })
+    groups = ["HC", "MCI(AB+)", "AD"]  # Fixed order for legend
     
     color_map = {
-        "HC":       '#8BC34A', 
-        "MCI(AB-)": "#D6A213",   
-        "MCI(AB+)": "#C11C0A",   
+        "HC":       '#8BC34A',   
+        "MCI(AB+)": "#c34023",   
         "AD":       '#1ABC9C'    
     }
 
@@ -668,14 +1062,14 @@ def scatter_plot_3d(df):
     fig_3d = plt.figure(figsize=(10, 8)) 
     ax_3d = fig_3d.add_subplot(111, projection="3d")
     
-    # Side view adjustment
-    ax_3d.view_init(elev=17, azim=42)
+    # Lower viewing angle
+    ax_3d.view_init(elev=12, azim=42)
     
     for g in groups:
         ab = group_means.loc[g, "ABeta"]
         ta = group_means.loc[g, "Tau"]
         ii = group_means.loc[g, "I_norm2"]
-        
+
         # AXIS SWAP: X=Tau, Y=ABeta, Z=I_norm2
         ax_3d.scatter(
             ta, # X-axis
@@ -711,9 +1105,9 @@ def scatter_plot_3d(df):
     # To move it "to the side", we offset it along the X-axis.
     # Changing 'x_max + (dx * 0.2)' moves it further left/right.
     fig_3d.text(
-        0.43, # <--- Adjust this 0.2 to move label "to the side"
+        0.53, # <--- Adjust this 0.2 to move label "to the side"
         0.06 ,
-        "Amyloid-beta centiloids",
+        "ABeta",
         fontsize=12, 
         fontweight='normal',
         horizontalalignment='center'         # Ensures the text is centered on the X-coordinate
@@ -736,7 +1130,11 @@ def scatter_plot_3d(df):
     ax_3d.xaxis._axinfo["grid"]["color"] = (0.85, 0.85, 0.85, 1)
     ax_3d.yaxis._axinfo["grid"]["color"] = (0.85, 0.85, 0.85, 1)
     ax_3d.zaxis._axinfo["grid"]["color"] = (0.85, 0.85, 0.85, 1)
-    ax_3d.legend(frameon=True) 
+    
+    # Create legend with fixed order and position inside the figure
+    handles, labels = ax_3d.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax_3d.legend([by_label[g] for g in groups], groups, loc='upper right', frameon=True, bbox_to_anchor=(0.98, 0.98))
     
     plt.tight_layout()
     plt.show()
@@ -963,7 +1361,7 @@ def scatter_plot_3d_2(df):
     fig.text(0.43, 0.06, "Integral violation", 
             fontsize=12, ha='center', rotation=0)
     
-    fig.text(0.10, 0.80, "Amyloid-beta centiloids", 
+    fig.text(0.10, 0.90, "ABeta", 
             fontsize=12, ha='center', rotation=0)
     
     # Clean aesthetics
@@ -1052,6 +1450,7 @@ def radarplot(rsn_means_df: pd.DataFrame, rsn_names: list):
         return ordered_values
 
     ad_values = get_ordered_means('AD')
+    mci_values = get_ordered_means('MCI(AB+)')
     hc_values = get_ordered_means('HC')
     # --- 2. Create Plotly Figure ---
     fig = go.Figure()
@@ -1063,6 +1462,13 @@ def radarplot(rsn_means_df: pd.DataFrame, rsn_names: list):
             name='HC',
             line=dict(color='#8BC34A'),
         ))
+    fig.add_trace(go.Scatterpolar(
+        r=mci_values,
+        theta=rsn_names,
+        fill='toself',
+        name='MCI(AB+)',
+        line=dict(color="#c34023"),
+    ))
     # Add the first radar plot trace for AD
     fig.add_trace(go.Scatterpolar(
         r=ad_values,
@@ -1075,26 +1481,28 @@ def radarplot(rsn_means_df: pd.DataFrame, rsn_names: list):
     fig.update_layout(
     polar=dict(
         radialaxis=dict(
-        visible=True,
-        # === Tick spacing ===
-        dtick=0.1,          # 4 tick steps → gives 5 ticks (0, .25, .50, .75, 1.0)
-        ticklabelstep=1,     # label every tick → 4 "value labels" between min & max
+            visible=True,
+            # === Tick spacing ===
+            dtick=40,          
+            ticklabelstep=1,    
 
-        # === Tick styling ===
-        tickfont=dict(size=18, color="black", family="Arial"),
+            # === Tick styling (Made Bold) ===
+            # Note: We append "Bold" or choose a heavy font variant for reliability
+            tickfont=dict(size=18, color="black", family="Arial Bold, Arial Black, sans-serif"),
+            
+            # === Optional: explicitly set axis range (helps control ticks) ===
+            range=[0, 0.07],
 
-        # === Optional: explicitly set axis range (helps control ticks) ===
-        range=[0, 0.9],
-
-        showline=True,
-        gridcolor="lightgray",
+            showline=True,
+            gridcolor="lightgray",
         ),
 
         angularaxis=dict(
             tickfont=dict(
-                size=18,
+                size=22,
                 color="black",
-                family="Arial"
+                # === Angular Labels Made Bold ===
+                family="Arial Bold, Arial Black, sans-serif"
             ),
         )
     ),
@@ -1110,11 +1518,775 @@ def radarplot(rsn_means_df: pd.DataFrame, rsn_names: list):
 )
     fig.show()
 
-# --- Example of how to call the function ---
-# Assuming 'long_df' contains your RSN means (Group, RSN, Value)
-# and RSN_LIST contains your RSN names in the desired order:
+def brain_map_parcel_average(df, measure: str, group: str, 
+                              vmin=None, vmax=None, 
+                              cmap='viridis', 
+                              save_path=None, 
+                              title_suffix=""):
+    """
+    Visualizes average parcel values for a specific measure and group on brain surface.
+    
+    Args:
+        df: DataFrame with columns ['group', measure, 'parcel_RSNs'] where measure 
+            contains arrays of parcel values
+        measure: Column name (e.g., 'I_norm2', 'X_norm2', 'Tau', 'ABeta')
+        group: Group label (e.g., 'HC', 'AD', 'MCI(AB+)', 'MCI(AB-)')
+        vmin, vmax: Colorbar limits (auto-computed if None)
+        cmap: Colormap name
+        save_path: Path to save figure (optional)
+        title_suffix: Additional text for title
+    """
+    from nilearn import surface, datasets, plotting
+    import nibabel as nib
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+    from nilearn.datasets import load_fsaverage
+    from nilearn.surface import SurfaceImage
+    from nilearn.datasets import load_fsaverage_data
 
-# radarplot_from_means(long_df, RSN_LIST)
+    group_df = df[df['group'] == group]
+    
+    if group_df.empty:
+        raise ValueError(f"No data found for group: {group}")
+    
+    # Stack all subjects' parcel arrays and average across subjects
+    all_parcels = np.vstack(group_df[measure].values)  # Shape: (n_subjects, n_parcels)
+    parcel_averages = np.nanmean(all_parcels, axis=0)  # Shape: (n_parcels,)
+    
+    NPARCELS = len(parcel_averages)
+    print(f"Group: {group}, Measure: {measure}, N_parcels: {NPARCELS}")
+    print(f"Value range: [{np.min(parcel_averages):.3f}, {np.max(parcel_averages):.3f}]")
+    
+    # ---------------------------------------------------------
+    # 2. Load Parcellation and Map Values to 3D Volume
+    # ---------------------------------------------------------
+    nii_path = os.path.join('data/ADNI-B_DATA/N238rev', 
+                           'Schaefer2018_400Parcels_7Networks_order_FSLMNI152_2mm.nii.gz')
+    
+    if not os.path.exists(nii_path):
+        raise FileNotFoundError(f"Parcellation file not found: {nii_path}")
+    
+    parcel_img = nib.load(nii_path)
+    parcel_data = parcel_img.get_fdata()
+    
+    # Create empty 3D map
+    group_map = np.zeros_like(parcel_data)
+    
+    for i in range(NPARCELS):
+    
+        nifti_label = i + 1
+        average_value = parcel_averages[i]
+        group_map[parcel_data == nifti_label] = average_value
+    
+    group_img = nib.Nifti1Image(group_map, affine=parcel_img.affine)
+    
+    print("Projecting to surface...")
+    fsaverage = datasets.fetch_surf_fsaverage()
+    fsaverage_meshes = load_fsaverage()
+    surface_image = SurfaceImage.from_volume(
+    mesh=fsaverage_meshes["pial"],
+    volume_img=group_img,
+    )
+    curv_sign = load_fsaverage_data(data_type="curvature")
+    for hemi, data in curv_sign.data.parts.items():
+        curv_sign.data.parts[hemi] = np.sign(data)
+
+    texture_left = surface.vol_to_surf(group_img, fsaverage.pial_left)
+    texture_right = surface.vol_to_surf(group_img, fsaverage.pial_right)
+
+    if vmin is None:
+        vmin = np.min(parcel_averages)
+    if vmax is None:
+        vmax = np.max(parcel_averages)
+    
+    print(f"Colorbar range: [{vmin:.3f}, {vmax:.3f}]")
+
+    fig = plt.figure(figsize=(20, 5))
+    
+    ax1 = fig.add_subplot(1, 4, 1, projection='3d')
+    plotting.plot_surf_stat_map(
+        stat_map=surface_image,
+        surf_mesh=fsaverage_meshes['pial'],  
+        hemi='both',
+        view='posterior',
+        colorbar=False,  # Show colorbar on the last panel
+        cmap=cmap,
+        bg_map=curv_sign,
+        vmin=vmin,
+        vmax=vmax,
+        axes=ax1,
+        darkness=0.5,
+        title=f'(Posterior)'
+    )
+    # Left hemisphere
+    ax2 = fig.add_subplot(1, 4, 2, projection='3d')
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_left, 
+        texture_left,
+        hemi='left', 
+        title=f'{group} - {measure} (Left){title_suffix}',
+        view='lateral',
+        colorbar=False, 
+        cmap=cmap,
+        bg_map=fsaverage.sulc_left,
+        vmin=vmin, 
+        vmax=vmax,
+        axes=ax2, 
+        darkness=0.5
+    )
+
+    ax3 = fig.add_subplot(1, 4, 3, projection='3d')
+    plotting.plot_surf_stat_map(
+    stat_map=surface_image,
+    surf_mesh=fsaverage_meshes['pial'],          # Pass the volumetric NIfTI, not textures
+    hemi='both',          # Nilearn will handle left + right
+    view='anterior',      # or 'posterior'
+    colorbar=False,
+    cmap=cmap,
+    bg_map=curv_sign,  # Nilearn handles right automatically
+    vmin=vmin,
+    vmax=vmax,
+    axes=ax3,
+    darkness=0.5,
+    title=f'(Anterior)'
+    )
+    
+    # Right hemisphere
+    ax4 = fig.add_subplot(1, 4, 4, projection='3d')
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_right, 
+        texture_right,
+        hemi='right', 
+        title=f'(Right){title_suffix}',
+        view='lateral',
+        colorbar=False, 
+        cmap=cmap,
+        bg_map=fsaverage.sulc_right,
+        vmin=vmin, 
+        vmax=vmax,
+        axes=ax4, 
+        darkness=0.5
+    )
+
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    
+    # Position: [left, bottom, width, height] in figure coordinates
+    cbar_ax = fig.add_axes([0.09, 0.15, 0.86, 0.05]) 
+    cbar = plt.colorbar(sm, cax=cbar_ax, orientation='horizontal') 
+    cbar.set_label('Amyloid-beta CL', fontsize=22, labelpad=10, fontweight='bold')
+    cbar.locator = MaxNLocator(nbins=5)  
+    cbar.ax.tick_params(labelsize=17, labelcolor='black')  # fontweight is not set here
+    for tick in cbar.ax.get_xticklabels():  # loop through tick labels
+        tick.set_fontweight('bold')
+    cbar.update_ticks()
+
+    
+    plt.tight_layout()
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig_name = f"brainmap_{group}_{measure}.png"
+        full_path = os.path.join(save_path, fig_name)
+        plt.savefig(full_path, dpi=300, bbox_inches='tight')
+        print(f"Saved to: {full_path}")
+    
+    plt.show()
+    plt.close(fig)
+
+def brain_map_difference(df, measure: str, group1: str, group2: str,
+                        vmin=None, vmax=None, 
+                        cmap='RdBu_r', 
+                        save_path=None):
+    """
+    Visualizes the difference between two groups (group1 - group2).
+    
+    Useful for showing AD vs HC differences, for example.
+    """
+    from nilearn import surface, datasets, plotting
+    import nibabel as nib
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+    from nilearn.datasets import load_fsaverage
+    from nilearn.surface import SurfaceImage
+    from nilearn.datasets import load_fsaverage_data
+    
+    # Get both groups
+    df1 = df[df['group'] == group1]
+    df2 = df[df['group'] == group2]
+    
+    if df1.empty or df2.empty:
+        raise ValueError(f"Missing data for {group1} or {group2}")
+    
+    # Compute averages
+    parcels1 = np.nanmean(np.vstack(df1[measure].values), axis=0)
+    parcels2 = np.nanmean(np.vstack(df2[measure].values), axis=0)
+    
+    # Difference
+    parcel_diff = np.abs(parcels1 - parcels2)
+    max_diff = np.max(parcel_diff)
+    parcel_diff = parcel_diff / max_diff
+    NPARCELS = len(parcel_diff)
+    
+    print(f"Difference: {group1} - {group2}")
+    print(f"Range: [{np.min(parcel_diff):.3f}, {np.max(parcel_diff):.3f}]")
+    
+    # Map to volume
+    nii_path = os.path.join('data/ADNI-B_DATA/N238rev', 
+                           'Schaefer2018_400Parcels_7Networks_order_FSLMNI152_2mm.nii.gz')
+    parcel_img = nib.load(nii_path)
+    parcel_data = parcel_img.get_fdata()
+    
+    diff_map = np.zeros_like(parcel_data)
+    for i in range(NPARCELS):
+    
+        nifti_label = i + 1
+        average_value = parcel_diff[i]
+        diff_map[parcel_data == nifti_label] = average_value
+    
+    group_img = nib.Nifti1Image(diff_map, affine=parcel_img.affine)
+    
+    print("Projecting to surface...")
+    fsaverage = datasets.fetch_surf_fsaverage()
+    fsaverage_meshes = load_fsaverage()
+    surface_image = SurfaceImage.from_volume(
+    mesh=fsaverage_meshes["pial"],
+    volume_img=group_img,
+    )
+    curv_sign = load_fsaverage_data(data_type="curvature")
+    for hemi, data in curv_sign.data.parts.items():
+        curv_sign.data.parts[hemi] = np.sign(data)
+
+    texture_left = surface.vol_to_surf(group_img, fsaverage.pial_left)
+    texture_right = surface.vol_to_surf(group_img, fsaverage.pial_right)
+    
+    # Symmetric colorbar around 0
+    if vmin is None:
+        vmin = np.min(parcel_diff)
+    if vmax is None:
+        vmax = np.max(parcel_diff)
+    
+    # Plot
+    fig = plt.figure(figsize=(20, 5))
+    
+    ax1 = fig.add_subplot(1, 4, 1, projection='3d')
+    plotting.plot_surf_stat_map(
+        stat_map=surface_image,
+        surf_mesh=fsaverage_meshes['pial'],  
+        hemi='both',
+        view='posterior',
+        colorbar=False,  # Show colorbar on the last panel
+        cmap=cmap,
+        bg_map=curv_sign,
+        vmin=vmin,
+        vmax=vmax,
+        axes=ax1,
+        darkness=0.5,
+        title=f'(Posterior)'
+    )
+    # Left hemisphere
+    ax2 = fig.add_subplot(1, 4, 2, projection='3d')
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_left, 
+        texture_left,
+        hemi='left', 
+        title=f'{group1} - {group2} (left)',
+        view='lateral',
+        colorbar=False, 
+        cmap=cmap,
+        bg_map=fsaverage.sulc_left,
+        vmin=vmin, 
+        vmax=vmax,
+        axes=ax2, 
+        darkness=0.5
+    )
+
+    ax3 = fig.add_subplot(1, 4, 3, projection='3d')
+    plotting.plot_surf_stat_map(
+    stat_map=surface_image,
+    surf_mesh=fsaverage_meshes['pial'],          # Pass the volumetric NIfTI, not textures
+    hemi='both',          # Nilearn will handle left + right
+    view='anterior',      # or 'posterior'
+    colorbar=False,
+    cmap=cmap,
+    bg_map=curv_sign,  # Nilearn handles right automatically
+    vmin=vmin,
+    vmax=vmax,
+    axes=ax3,
+    darkness=0.5,
+    title=f'(Anterior)'
+    )
+    
+    # Right hemisphere
+    ax4 = fig.add_subplot(1, 4, 4, projection='3d')
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_right, 
+        texture_right,
+        hemi='right', 
+        title=f'{group1} - {group2} (Right)',
+        view='lateral',
+        colorbar=False, 
+        cmap=cmap,
+        bg_map=fsaverage.sulc_right,
+        vmin=vmin, 
+        vmax=vmax,
+        axes=ax4, 
+        darkness=0.5
+    )
+
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    
+    # Position: [left, bottom, width, height] in figure coordinates
+    cbar_ax = fig.add_axes([0.5, 0.29, 0.015, 0.46]) 
+    cbar = plt.colorbar(sm, cax=cbar_ax, orientation='vertical') 
+    cbar.set_label('', fontsize=22, labelpad=10, fontweight='bold')
+    #cbar.locator = MaxNLocator(nbins=3)  
+    cbar.locator = FixedLocator([0,1]) 
+    cbar.ax.tick_params(labelsize=14, labelcolor='black',labelleft=True, labelright=False, left=True, right=False)  # fontweight is not set here
+    for tick in cbar.ax.get_yticklabels():  # loop through tick labels
+        tick.set_fontweight('bold')
+    cbar.update_ticks()
+    
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        fig_name = f"brainmap_diff_{group1}_vs_{group2}_{measure}.png"
+        full_path = os.path.join(save_path, fig_name)
+        plt.savefig(full_path, dpi=300, bbox_inches='tight')
+        print(f"Saved to: {full_path}")
+    
+    plt.show()
+    plt.close(fig)
+
+def brain_map_correlation(df, mode='between_groups', 
+                          measure1=None, measure2=None,
+                          group1=None, group2=None,
+                          vmin=-1, vmax=1, 
+                          cmap='RdBu_r', 
+                          save_path=None,
+                          atlas_path=None,
+                          show_pvalues=True):
+    from scipy.stats import pearsonr
+    from nilearn import surface, datasets, plotting
+    import nibabel as nib
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+    from matplotlib.ticker import FixedLocator
+    from nilearn.datasets import load_fsaverage
+    from nilearn.surface import SurfaceImage
+    from nilearn.datasets import load_fsaverage_data
+    
+    # ==================== INPUT VALIDATION ====================
+    if mode not in ['between_groups', 'between_measures']:
+        raise ValueError("mode must be 'between_groups' or 'between_measures'")
+    
+    if mode == 'between_groups':
+        if measure1 is None or group1 is None or group2 is None:
+            raise ValueError("For 'between_groups' mode, provide: measure1, group1, group2")
+        if measure2 is None:
+            measure2 = measure1  # Same measure across groups
+    
+    if mode == 'between_measures':
+        if measure1 is None or measure2 is None:
+            raise ValueError("For 'between_measures' mode, provide: measure1, measure2")
+    
+    # Set default atlas path
+    if atlas_path is None:
+        atlas_path = os.path.join('data/ADNI-B_DATA/N238rev', 
+                                  'Schaefer2018_400Parcels_7Networks_order_FSLMNI152_2mm.nii.gz')
+    
+    # ==================== DATA EXTRACTION ====================
+    print(f"\n{'='*60}")
+    print(f"Computing Pearson Correlations - Mode: {mode}")
+    print(f"{'='*60}")
+    
+    if mode == 'between_groups':
+        # Get both groups
+        df1 = df[df['group'] == group1].copy()
+        df2 = df[df['group'] == group2].copy()
+        
+        if df1.empty or df2.empty:
+            raise ValueError(f"Missing data for {group1} or {group2}")
+        
+        # Stack subjects × parcels
+        data1 = np.vstack(df1[measure1].values)  # (n_subjects1, n_parcels)
+        data2 = np.vstack(df2[measure2].values)  # (n_subjects2, n_parcels)
+        
+        print(f"Group 1 ({group1}): {data1.shape[0]} subjects")
+        print(f"Group 2 ({group2}): {data2.shape[0]} subjects")
+        print(f"Measure: {measure1}")
+        
+        # Need same number of subjects for correlation
+        n_min = min(data1.shape[0], data2.shape[0])
+        if data1.shape[0] != data2.shape[0]:
+            print(f"\nWarning: Unequal group sizes. Using first {n_min} subjects from each.")
+            data1 = data1[:n_min, :]
+            data2 = data2[:n_min, :]
+        
+        title_str = f"{measure1}: {group1} vs {group2}"
+        
+    elif mode == 'between_measures':
+        # Filter by group if specified
+        if group1 is not None:
+            df_filtered = df[df['group'] == group1].copy()
+            title_str = f"{measure1} vs {measure2} ({group1})"
+        else:
+            groups_to_keep = ["HC", "MCI(AB+)", "AD"]
+            df_filtered = df[df['group'].isin(groups_to_keep)].copy()
+            title_str = f"{measure1} vs {measure2} (All subjects)"
+        
+        if df_filtered.empty:
+            raise ValueError(f"No data available for the specified group")
+        
+        # Stack subjects × parcels
+        data1 = np.vstack(df_filtered[measure1].values)
+        data2 = np.vstack(df_filtered[measure2].values)
+        
+        print(f"Subjects: {data1.shape[0]}")
+        print(f"Measures: {measure1} vs {measure2}")
+        if group1 is not None:
+            print(f"Group: {group1}")
+    
+    NPARCELS = data1.shape[1]
+    print(f"Parcels: {NPARCELS}")
+    
+    # ==================== COMPUTE CORRELATIONS ====================
+    print("\nComputing parcel-wise Pearson correlations...")
+    
+    correlations = np.zeros(NPARCELS)
+    pvalues = np.zeros(NPARCELS)
+    
+    for p in range(NPARCELS):
+        parcel1 = data1[:, p]
+        parcel2 = data2[:, p]
+        
+        # Remove NaN values
+        valid_mask = ~(np.isnan(parcel1) | np.isnan(parcel2))
+        
+        if np.sum(valid_mask) > 3:  # Need at least 3 points for correlation
+            r, pval = pearsonr(parcel1[valid_mask], parcel2[valid_mask])
+            correlations[p] = r
+            pvalues[p] = pval
+        else:
+            correlations[p] = np.nan
+            pvalues[p] = np.nan
+    
+    # Print statistics
+    valid_corrs = correlations[~np.isnan(correlations)]
+    print(f"\nCorrelation Statistics:")
+    print(f"  Mean: {np.mean(valid_corrs):.3f}")
+    print(f"  Std:  {np.std(valid_corrs):.3f}")
+    print(f"  Range: [{np.min(valid_corrs):.3f}, {np.max(valid_corrs):.3f}]")
+    print(f"  Median: {np.median(valid_corrs):.3f}")
+    
+    # Count significant correlations
+    sig_count = np.sum(pvalues < 0.05)
+    sig_bonf = np.sum(pvalues < (0.05 / NPARCELS))  # Bonferroni
+    print(f"\nSignificance:")
+    print(f"  p < 0.05: {sig_count}/{NPARCELS} parcels ({100*sig_count/NPARCELS:.1f}%)")
+    print(f"  p < {0.05/NPARCELS:.2e} (Bonferroni): {sig_bonf}/{NPARCELS} parcels")
+    
+    if show_pvalues:
+        print("\nTop strongest correlations:")
+        top_idx = np.argsort(np.abs(correlations))[::-1]
+        for rank, idx in enumerate(top_idx, 1):
+            print(f"  {rank}. Parcel {idx}: r={correlations[idx]:.3f}, p={pvalues[idx]:.4f}")
+    
+    # ==================== MAP TO VOLUME ====================
+    print("\nMapping to brain volume...")
+    
+    parcel_img = nib.load(atlas_path)
+    parcel_data = parcel_img.get_fdata()
+    
+    corr_map = np.zeros_like(parcel_data)
+    
+    for i in range(NPARCELS):
+        nifti_label = i + 1
+        corr_value = correlations[i]
+        
+        # Set NaN correlations to 0 for visualization
+        if np.isnan(corr_value):
+            corr_value = 0.0
+        
+        corr_map[parcel_data == nifti_label] = corr_value
+    
+    corr_img = nib.Nifti1Image(corr_map, affine=parcel_img.affine)
+    
+    # ==================== PROJECT TO SURFACE ====================
+    print("Projecting to surface...")
+    
+    fsaverage = datasets.fetch_surf_fsaverage()
+    fsaverage_meshes = load_fsaverage()
+    
+    surface_image = SurfaceImage.from_volume(
+        mesh=fsaverage_meshes["pial"],
+        volume_img=corr_img,
+    )
+    
+    curv_sign = load_fsaverage_data(data_type="curvature")
+    for hemi, data in curv_sign.data.parts.items():
+        curv_sign.data.parts[hemi] = np.sign(data)
+    
+    texture_left = surface.vol_to_surf(corr_img, fsaverage.pial_left)
+    texture_right = surface.vol_to_surf(corr_img, fsaverage.pial_right)
+    
+    # ==================== PLOTTING ====================
+    print("Creating brain surface plots...")
+    
+    fig = plt.figure(figsize=(20, 5))
+    
+    # Posterior view
+    ax1 = fig.add_subplot(1, 4, 1, projection='3d')
+    plotting.plot_surf_stat_map(
+        stat_map=surface_image,
+        surf_mesh=fsaverage_meshes['pial'],
+        hemi='both',
+        view='posterior',
+        colorbar=False,
+        cmap=cmap,
+        bg_map=curv_sign,
+        vmin=vmin,
+        vmax=vmax,
+        axes=ax1,
+        darkness=0.5,
+        title='Posterior'
+    )
+    
+    # Left lateral
+    ax2 = fig.add_subplot(1, 4, 2, projection='3d')
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_left,
+        texture_left,
+        hemi='left',
+        title='Left Lateral',
+        view='lateral',
+        colorbar=False,
+        cmap=cmap,
+        bg_map=fsaverage.sulc_left,
+        vmin=vmin,
+        vmax=vmax,
+        axes=ax2,
+        darkness=0.5
+    )
+    
+    # Anterior view
+    ax3 = fig.add_subplot(1, 4, 3, projection='3d')
+    plotting.plot_surf_stat_map(
+        stat_map=surface_image,
+        surf_mesh=fsaverage_meshes['pial'],
+        hemi='both',
+        view='anterior',
+        colorbar=False,
+        cmap=cmap,
+        bg_map=curv_sign,
+        vmin=vmin,
+        vmax=vmax,
+        axes=ax3,
+        darkness=0.5,
+        title='Anterior'
+    )
+    
+    # Right lateral
+    ax4 = fig.add_subplot(1, 4, 4, projection='3d')
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_right,
+        texture_right,
+        hemi='right',
+        title='Right Lateral',
+        view='lateral',
+        colorbar=False,
+        cmap=cmap,
+        bg_map=fsaverage.sulc_right,
+        vmin=vmin,
+        vmax=vmax,
+        axes=ax4,
+        darkness=0.5
+    )
+    
+    # Colorbar
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    
+    cbar_ax = fig.add_axes([0.08, 0.15, 0.86, 0.05]) 
+    cbar = plt.colorbar(sm, cax=cbar_ax, orientation='horizontal') 
+    cbar.set_label('Correlation', fontsize=22, labelpad=10, fontweight='bold')
+    # cbar.locator = MaxNLocator(nbins=5)  
+    cbar.locator = FixedLocator([-1,0,1]) 
+    cbar.ax.tick_params(labelsize=17, labelcolor='black')  # fontweight is not set here
+    for tick in cbar.ax.get_xticklabels():  # loop through tick labels
+        tick.set_fontweight('bold')
+    cbar.update_ticks()
+    
+    cbar.update_ticks()
+    
+    # Overall title
+    fig.suptitle(f'Parcel-wise Correlations: {title_str}', 
+                fontsize=16, fontweight='bold', y=0.98)
+    
+    plt.tight_layout()
+    
+    # Save
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        
+        if mode == 'between_groups':
+            fig_name = f"brainmap_corr_{measure1}_{group1}_vs_{group2}.png"
+        else:
+            group_str = f"_{group1}" if group1 else "_all"
+            fig_name = f"brainmap_corr_{measure1}_vs_{measure2}{group_str}.png"
+        
+        full_path = os.path.join(save_path, fig_name)
+        plt.savefig(full_path, dpi=300, bbox_inches='tight')
+        print(f"\nSaved to: {full_path}")
+    
+    plt.show()
+    plt.close(fig)
+    
+    return correlations, pvalues, top_idx
+
+def plot_correlation_histogram(correlations, pvalues, title='', save_path=None):
+    """
+    Plot histogram of correlation values with significance overlay.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    
+    valid_corrs = correlations[~np.isnan(correlations)]
+    valid_pvals = pvalues[~np.isnan(pvalues)]
+    
+    # Histogram of correlations
+    axes[0].hist(valid_corrs, bins=50, edgecolor='black', alpha=0.7)
+    axes[0].axvline(0, color='red', linestyle='--', linewidth=2, label='r=0')
+    axes[0].axvline(np.mean(valid_corrs), color='green', linestyle='--', 
+                   linewidth=2, label=f'Mean={np.mean(valid_corrs):.3f}')
+    axes[0].set_xlabel('Correlation (r)', fontsize=12)
+    axes[0].set_ylabel('Count', fontsize=12)
+    axes[0].set_title(f'Distribution of Correlations\n{title}', fontsize=14)
+    axes[0].legend()
+    axes[0].grid(alpha=0.3)
+    
+    # P-value histogram
+    axes[1].hist(valid_pvals, bins=50, edgecolor='black', alpha=0.7, color='orange')
+    axes[1].axvline(0.05, color='red', linestyle='--', linewidth=2, label='p=0.05')
+    axes[1].set_xlabel('P-value', fontsize=12)
+    axes[1].set_ylabel('Count', fontsize=12)
+    axes[1].set_title('Distribution of P-values', fontsize=14)
+    axes[1].legend()
+    axes[1].grid(alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Histogram saved to: {save_path}")
+    
+    plt.show()
+    # plt.close(fig)
+def plot(df, group, measure, mode="both"):
+    """
+    mode:
+        "single"     -> plot one random subject from the group
+        "group_mean" -> plot the group average only
+        "both"       -> plot both figures
+    """
+
+    if group is not None:
+        df_group = df[df["group"] == group]
+    else:
+        df_group = df
+
+    if len(df_group) == 0:
+        raise ValueError(f"No subjects found for group '{group}'")
+
+    # ============================
+    # 1) SINGLE SUBJECT PLOT
+    # ============================
+    if mode in ["single", "both"]:
+
+        # pick one random subject
+        parcel_values = df_group[measure].sample(1).values[0]
+        mean_value = np.mean(parcel_values)
+
+        fig, ax = plt.subplots(figsize=(10, 4))
+
+        ax.plot(
+            np.arange(len(parcel_values)),
+            parcel_values,
+            lw=1.2
+        )
+
+        ax.axhline(
+            mean_value,
+            color='red',
+            linestyle='--',
+            linewidth=1.2,
+            label=f"Mean: {mean_value:.2f}"
+        )
+
+        ax.set_xlabel("Parcel index", fontsize=11, fontweight='bold')
+        ax.set_ylabel(f"{measure} parameter", fontsize=11, fontweight='bold')
+
+        ax.set_title("", fontsize=12, fontweight='bold', pad=10)
+
+        ax.tick_params(axis='both', labelsize=9)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+        # ✅ remove gap between y-axis and first x value
+        ax.margins(x=0)
+
+        ax.legend(fontsize=9)
+        plt.tight_layout()
+        plt.show()
+
+    # ============================
+    # 2) GROUP AVERAGE PLOT
+    # ============================
+    if mode in ["group_mean", "both"]:
+
+    # stack subject-level parcel arrays → (n_subjects, n_parcels)
+        all_values = np.vstack(df_group[measure].values)
+
+        subject_means = np.mean(all_values, axis=1) 
+        fig, ax = plt.subplots(figsize=(6, 4))
+
+        ax.scatter(
+            np.arange(len(subject_means)),
+            subject_means,
+            s=25,
+            alpha=0.8
+        )
+
+        ax.set_xlabel("Subject index", fontsize=11, fontweight='bold')
+        ax.set_ylabel(f"Mean {measure} per subject", fontsize=11, fontweight='bold')
+        ax.set_title(f"Subject-wise Means ({group})", fontsize=12, fontweight='bold')
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.margins(x=0)
+
+        plt.tight_layout()
+        plt.show()
+        fig, ax = plt.subplots(figsize=(6, 4))
+
+        ax.hist(subject_means, bins=30, alpha=0.85)
+
+        ax.set_xlabel(f"Mean {measure} per subject", fontsize=11, fontweight='bold')
+        ax.set_ylabel("Number of subjects", fontsize=11, fontweight='bold')
+        ax.set_title(f"Distribution of Subject Means ({group})", fontsize=12, fontweight='bold')
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+        plt.tight_layout()
+        plt.show()
+
+
+
+
 
 # Example Parameters (Adjust to your actual data)
 RSN_ORDER_val = ['Vis','SalVentAttn', 'SomMot', 'DorsAttn', 'Limbic', 'Cont', 'Def']
@@ -1139,37 +2311,100 @@ df_based = pd.DataFrame({k: fdt_data_based[k].tolist() for k in fdt_data_based.f
 fdt_data_free = np.load(os.path.join(save_path, filename_free), allow_pickle=True)
 df_free = pd.DataFrame({k: fdt_data_free[k].tolist() for k in fdt_data_free.files})
 
-df_based = loadProteins(df_based, DL_type, 'Amyloid', repo_root) #'Amyloid' or 'Tau'
-df_based = loadProteins(df_based, DL_type, 'Tau', repo_root) #'Amyloid' or 'Tau'
-df_free = loadProteins(df_free, DL_type, 'Amyloid', repo_root) #'Amyloid' or 'Tau'
-df_free = loadProteins(df_free, DL_type, 'Tau', repo_root) #'
+df_based = loadProteins(df_based, DL_type, 'Amyloid', repo_root,filt=False) #'Amyloid' or 'Tau'
+df_based = loadProteins(df_based, DL_type, 'Tau', repo_root,filt=False) #'Amyloid' or 'Tau'
+df_free = loadProteins(df_free, DL_type, 'Amyloid', repo_root,filt=True) #'Amyloid' or 'Tau'
+df_free = loadProteins(df_free, DL_type, 'Tau', repo_root,filt=True) #'
 
 df_based['diff'] = [
     (np.array(X) + np.array(I) - 1).tolist()
     for X, I in zip(df_based['X_norm2'], df_based['I_norm2'])
 ]
-
-# Calculate parcel-wise difference for df_free
 df_free['diff'] = [
     (np.array(X) + np.array(I) - 1).tolist()
     for X, I in zip(df_free['X_norm2'], df_free['I_norm2'])
 ]
-print([np.mean(diff) for diff in df_based['diff'][110:115]])
-print([np.mean(diff) for diff in df_based['diff'][10:15]])
+
+# print([np.mean(diff) for diff in df_based['diff'][110:115]])
+# print([np.mean(diff) for diff in df_based['diff'][10:15]])
 
 
 measure = 'I_norm2'
+df = df_based
+# plot(df_based, group=None, measure="a", mode="both")
+# plot(df_based, group=None, measure="sigma", mode="both")
+# plot(df_based, group=None, measure="f_diff", mode="both")
 
 
-# #print(df.columns)
-#parcel_comparison(df, 'I_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
-#subject_comparison(df, 'I_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
-# parcel_comparison(df, 'X_norm2', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
+
+# corrs, pvals, top = brain_map_correlation(
+#     df, mode='between_measures',
+#     measure1='I_norm2', measure2='Tau',
+#     #group1='AD',
+#     cmap='cividis',
+# )
+# corrs, pvals, top = brain_map_correlation(
+#     df, mode='between_measures',
+#     measure1='I_norm2', measure2='ABeta',
+#     #group1='AD',
+#     cmap='cividis',
+# )
+# plot_correlation_histogram(
+#     corrs, pvals,
+#     title='I_norm2 vs Tau',
+#     save_path=os.path.join(save_path_plot, 'corr_hist_i_norm2_tau_ad.png')
+# )
 # subject_comparison(df_based, 'ABeta', 'modelbased', NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 # subject_comparison(df_based, 'Tau', 'modelbased', NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
-#print(np.max([np.max(arr) for arr in df['ABeta'].values if isinstance(arr, np.ndarray)]))
-scatter_plot_3d(df_free)
+# scatter_plot_3d(df)
 # scatter_plot_3d_2(df_based)
+# brain_map_parcel_average(
+#     df=df,
+#     measure='ABeta',
+#     group='HC',
+#     cmap='plasma', #t:inferno, AB:RdYlBu, i:viridis
+#     save_path='./plots',
+#     vmax=120, #t:2.3, i:0.09, ab:120
+#     vmin=-45  #t:0.7, i:0.01, ab:-45
+# )
+# brain_map_parcel_average(
+#     df=df,
+#     measure='ABeta',
+#     group='MCI(AB+)',
+#     cmap='plasma', #t:inferno, AB:RdYlBu, i:viridis
+#     save_path='./plots',
+#     vmax=120, #t:2.3, i:0.09, ab:120
+#     vmin=-45  #t:0.7, i:0.01, ab:-45
+# )
+# brain_map_parcel_average(
+#     df=df,
+#     measure='ABeta',
+#     group='AD',
+#     cmap='plasma', #t:inferno, AB:RdYlBu, i:viridis
+#     save_path='./plots',
+#     vmax=120, #t:2.3, i:0.09, ab:120
+#     vmin=-45  #t:0.7, i:0.01, ab:-45
+# )
+# brain_map_difference(
+#     df=df,
+#     measure='Tau',
+#     group1='HC',
+#     group2='AD',
+#     cmap='cividis', 
+#     save_path='./plots',
+#     vmax=1,
+#     vmin=0
+# )
+# brain_map_difference(
+#     df=df,
+#     measure='I_norm2',
+#     group1='HC',
+#     group2='AD',
+#     cmap='cividis', 
+#     save_path='./plots',
+#     vmax=1,
+#     vmin=0
+# )
 
 
 import json
@@ -1241,16 +2476,40 @@ model_input = {
 }
 
 
-plot_multi_model_comparison_violin(
-    model_data_dicts=model_input,
-    groups_order=GROUPS_ORDER_val,
-    measure_name='Integral Violation',
-    y_label_override='Integral violation',
-    test_type='ranksum',
-    # save_path='./plots'  # Uncomment to save
+# plot_multi_model_comparison_violin(
+#     model_data_dicts=model_input,
+#     groups_order=GROUPS_ORDER_val,
+#     measure_name='Integral Violation',
+#     y_label_override='Integral violation',
+#     test_type='ranksum',
+#     # save_path='./plots'  # Uncomment to save
+# )
+
+results = plot_violin_groups_with_significance(
+    df_data=df,
+    measure_col_name='I_norm2',
+    group_col_name='group',
+    comparisons=[
+        ('HC', 'MCI(AB+)'),
+        ('HC', 'AD'),
+        ('MCI(AB+)', 'AD')
+    ],
+    measure_display_name='Integral violation [subject average]',
+    save_path='./results/plots'
+)
+plot_violin_groups_with_significance_parcel_mean(
+    df_data=df,
+    measure_col_name='I_norm2',
+    comparisons=[
+        ('HC', 'MCI(AB+)'),
+        ('HC', 'AD'),
+        ('MCI(AB+)', 'AD')
+    ],
+    measure_display_name='Integral violation [parcel average]',
+    save_path='./results/plots',
+    n_permutations=10000
 )
 
-df = df_free
 plot_ready_df = aggregate_all_rsns_for_plotting(
     df=df,
     measure=measure,
@@ -1263,7 +2522,7 @@ plot_multi_rsn_split_violin(
     rsn_order=RSN_ORDER_val,
     groups_order=GROUPS_ORDER_val,
     measure_name=measure,
-    y_label_override='Integral violation',
+    y_label_override='Integral violation [subject average]',
     test_type='ranksum',
 )
 
@@ -1280,27 +2539,27 @@ plot_multi_rsn_split_violin(
     rsn_order=RSN_ORDER_val,
     groups_order=GROUPS_ORDER_val,
     measure_name='Integral Violation',
-    y_label_override='Integral violation',
+    y_label_override='Integral violation [parcel average]',
     test_type='permutation',
     n_permutations=10000,
 )
 
-# 2. Plot for 2 Models
-model_input = {
-    'Model-free': df_free,
-    'Model-based': df_based
-}
+# # 2. Plot for 2 Models
+# model_input = {
+#     'Model-free': df_free,
+#     'Model-based': df_based
+# }
 
-plot_multi_model_comparison_violin(
-    model_data_dicts=model_input,
-    groups_order=GROUPS_ORDER_val,
-    measure_name='Integral Violation',
-    y_label_override='Integral violation',
-    save_path='./plots',
-    test_type='permutation',
-    n_permutations=10000,
-    measure_col_name=measure
-)
+# plot_multi_model_comparison_violin(
+#     model_data_dicts=model_input,
+#     groups_order=GROUPS_ORDER_val,
+#     measure_name='Integral Violation',
+#     y_label_override='Integral violation',
+#     save_path='./plots',
+#     test_type='permutation',
+#     n_permutations=10000,
+#     measure_col_name=measure
+# )
 
 # subject_comparison_rsn(df, measure, 'All', NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)
 # subject_comparison_rsn(df, measure, 'SomMot', model_type, NPARCELLS, fit_sigma, fit_a, save_path_plot=save_path_plot)

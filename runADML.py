@@ -89,13 +89,13 @@ def get_data():
 
 from src.data_loaders.load_data_records import loadProteins
 # ==================== DATA SETUP ====================
-filename = f"FDT_results_DL_B_N400_sigTrue_aTrue.npz"
+filename = f"FDT_results_DL_B1_N400_sigTrue_aTrue.npz"
 repo_root = os.getcwd() 
 save_path = os.path.join(repo_root, "data", "FDT_DATA")
 fdt_data = np.load(os.path.join(save_path, filename), allow_pickle=True)
 df = pd.DataFrame({k: fdt_data[k].tolist() for k in fdt_data.files})
-df = loadProteins(df, 'DL_B', 'ABeta', repo_root)
-df = loadProteins(df, 'DL_B', 'Tau', repo_root)
+df = loadProteins(df, 'DL_B1', 'Tau', repo_root)
+df = loadProteins(df, 'DL_B1', 'ABeta', repo_root)
 
 # Create feature matrices - each has shape (N_subjects, N_parcels)
 Xdict = {
@@ -122,7 +122,7 @@ for key in Xdict.keys():
     if len(Xdict[key].shape) == 1:
         Xdict[key] = np.expand_dims(Xdict[key], axis=1)
 
-Ystr = [group_classes[c-1] for c in Y]
+Ystr = [group_classes[int(c)-1] for c in Y]
 
 # Setup region/feature names - FIXED: proper parcel numbering
 N_parcels = Xdict['I_norm2'].shape[1]
@@ -461,7 +461,7 @@ sf2, FI2, FX2, FN2, CM2, YH2, YT2, TI2, feat_names2 = nestedCV(Xdict, Y, sim_var
 print("\n" + "="*60)
 print("Running Combined features...")
 print("="*60)
-sf3, FI3, FX3, FN3, CM3, YH3, YT3, TI3, feat_names3 = nestedCV(Xdict, Y, emp_varnames + sim_varnames)
+sf3, FI3, FX3, FN3, CM3, YH3, YT3, TI3, feat_names3 = nestedCV(Xdict, Y, FN2 + FN1)
 
 # Analyze and plot results
 print("\n" + "="*60)
@@ -482,158 +482,158 @@ print(f"Combined:   F1 = {np.mean(sf3):.3f} ± {np.std(sf3):.3f}")
 
 
 # %% Classification Functions
-def clean_features(X, featnames=None):
-    '''
-    Removes deficient columns from feature matrices
-    '''
-    _, mc = scipy.stats.mode(X, axis=0)
-    rmidx = np.where(np.std(X,axis=0)==0)[0]
-    rmidx = np.append(rmidx, np.where(mc[0]>10)[0], axis=0)
-    rmidx = np.unique(rmidx)
+# def clean_features(X, featnames=None):
+#     '''
+#     Removes deficient columns from feature matrices
+#     '''
+#     _, mc = scipy.stats.mode(X, axis=0)
+#     rmidx = np.where(np.std(X,axis=0)==0)[0]
+#     rmidx = np.append(rmidx, np.where(mc[0]>10)[0], axis=0)
+#     rmidx = np.unique(rmidx)
     
-    X = np.delete(X, rmidx, axis=1)    
-    if featnames is not None:
-        trimmednames = [f for i,f in enumerate(featnames) if i not in rmidx]
-        return X, trimmednames
-    else:
-        return X
+#     X = np.delete(X, rmidx, axis=1)    
+#     if featnames is not None:
+#         trimmednames = [f for i,f in enumerate(featnames) if i not in rmidx]
+#         return X, trimmednames
+#     else:
+#         return X
     
-def getFeatureMatrix(Xdict, varnames):
-    '''
-    Constructs a feature matrix from Xdict using the variable names in varnames
-    '''
-    X = np.concatenate([Xdict[features] for features in varnames], axis=1) 
-    Xclean = clean_features(X)
+# def getFeatureMatrix(Xdict, varnames):
+#     '''
+#     Constructs a feature matrix from Xdict using the variable names in varnames
+#     '''
+#     X = np.concatenate([Xdict[features] for features in varnames], axis=1) 
+#     Xclean = clean_features(X)
     
-    if Xclean.shape[1] > 0:
-        X = Xclean
-    if X.shape[1] == 0:
-        scores = [np.nan, np.nan]
-        est = None
-        return scores, est
-    return Xclean
+#     if Xclean.shape[1] > 0:
+#         X = Xclean
+#     if X.shape[1] == 0:
+#         scores = [np.nan, np.nan]
+#         est = None
+#         return scores, est
+#     return Xclean
 
-def nestedCV(Xdict, Y, varnames):
-    '''
-    Performs nested cross-validation for simultaneous model selection and 
-    feature selection using SVM with Random Forest for feature selection.
-    '''
-    # Get the faeture matrix according to inputted variable names
-    if USE_REG_MEANS:
-        X = getFeatureMatrix(Xdict, varnames, opt='abeta_tau_reg_means')
-    else:
-        X = getFeatureMatrix(Xdict, varnames)
+# def nestedCV(Xdict, Y, varnames):
+#     '''
+#     Performs nested cross-validation for simultaneous model selection and 
+#     feature selection using SVM with Random Forest for feature selection.
+#     '''
+#     # Get the faeture matrix according to inputted variable names
+#     if USE_REG_MEANS:
+#         X = getFeatureMatrix(Xdict, varnames, opt='abeta_tau_reg_means')
+#     else:
+#         X = getFeatureMatrix(Xdict, varnames)
 
-    idx = np.arange(0, X.shape[0], 1)
+#     idx = np.arange(0, X.shape[0], 1)
     
-    # Define outputs
-    SC = [] # Outer classifier scores
-    FI = [] # Feature Importances
-    FX = [] # Index of top features
-    CM = [] # Test set confusion matrices
-    YH = [] # Predicted Class Labels
-    YT = [] # True Class Labels
-    TI = [] # Test index
+#     # Define outputs
+#     SC = [] # Outer classifier scores
+#     FI = [] # Feature Importances
+#     FX = [] # Index of top features
+#     CM = [] # Test set confusion matrices
+#     YH = [] # Predicted Class Labels
+#     YT = [] # True Class Labels
+#     TI = [] # Test index
     
-    # Set up components of the ML pipeline
-    scoring = 'f1_weighted' #'accuracy'
+#     # Set up components of the ML pipeline
+#     scoring = 'f1_weighted' #'accuracy'
     
-    ssc = RobustScaler()
-    clf_inner = RFC(random_state=999)
-    clf_outer = svm.SVC(random_state=999)
+#     ssc = RobustScaler()
+#     clf_inner = RFC(random_state=999)
+#     clf_outer = svm.SVC(random_state=999)
     
-    cv_inner = StratifiedShuffleSplit(n_splits=10, test_size=0.25, random_state=777)
-    cv_outer = StratifiedShuffleSplit(n_splits=100, test_size=0.25, random_state=888)
+#     cv_inner = StratifiedShuffleSplit(n_splits=10, test_size=0.25, random_state=777)
+#     cv_outer = StratifiedShuffleSplit(n_splits=100, test_size=0.25, random_state=888)
     
-    for train_outer, test_outer in cv_outer.split(X, Y):
-        Xtrain, Xtest = X[train_outer], X[test_outer]
-        Ytrain, Ytest = Y[train_outer], Y[test_outer]
+#     for train_outer, test_outer in cv_outer.split(X, Y):
+#         Xtrain, Xtest = X[train_outer], X[test_outer]
+#         Ytrain, Ytest = Y[train_outer], Y[test_outer]
         
-        # Set up Inner CV loop using a grid search CV
-        pipeline_inner = Pipeline(memory=None,
-                                  steps=[('Scaler', ssc),
-                                         ('Classifier', clf_inner)])
+#         # Set up Inner CV loop using a grid search CV
+#         pipeline_inner = Pipeline(memory=None,
+#                                   steps=[('Scaler', ssc),
+#                                          ('Classifier', clf_inner)])
         
-        inner_params = [{'Classifier__class_weight': ['balanced'],
-                         'Classifier__criterion': ['entropy'], # gini or entropy
-                         'Classifier__n_estimators': [10, 50],
-                         'Classifier__max_depth': [None],
-                         'Classifier__min_samples_split': [3, 4],
-                         'Classifier__min_samples_leaf': [2, 3],
-                         'Classifier__max_features': ['sqrt'],#,'log2',None,
-                         }]        
+#         inner_params = [{'Classifier__class_weight': ['balanced'],
+#                          'Classifier__criterion': ['entropy'], # gini or entropy
+#                          'Classifier__n_estimators': [10, 50],
+#                          'Classifier__max_depth': [None],
+#                          'Classifier__min_samples_split': [3, 4],
+#                          'Classifier__min_samples_leaf': [2, 3],
+#                          'Classifier__max_features': ['sqrt'],#,'log2',None,
+#                          }]        
     
-        # Run Inner CV loop using a grid search CV
-        grid_inner = GridSearchCV(pipeline_inner, inner_params, cv=cv_inner, 
-                                  scoring=scoring, verbose=False, n_jobs=-1)
-        grid_inner.fit(Xtrain, Ytrain)
+#         # Run Inner CV loop using a grid search CV
+#         grid_inner = GridSearchCV(pipeline_inner, inner_params, cv=cv_inner, 
+#                                   scoring=scoring, verbose=False, n_jobs=-1)
+#         grid_inner.fit(Xtrain, Ytrain)
     
-        # Get best model and its feature importances (GINI index) - try entropy instead
-        for obj in grid_inner.best_estimator_.steps:
-#            print(obj[1])
-            if obj[0] is 'Scaler':
-                ssc_inner_best = base.clone(obj[1], safe=True)
-            elif obj[0] is 'Feature_sel':
-                sel_inner_best = base.clone(obj[1], safe=True)
-            elif obj[0] is 'Classifier':
-                clf_inner_best = base.clone(obj[1], safe=True)
-                fi = obj[1].feature_importances_
+#         # Get best model and its feature importances (GINI index) - try entropy instead
+#         for obj in grid_inner.best_estimator_.steps:
+# #            print(obj[1])
+#             if obj[0] is 'Scaler':
+#                 ssc_inner_best = base.clone(obj[1], safe=True)
+#             elif obj[0] is 'Feature_sel':
+#                 sel_inner_best = base.clone(obj[1], safe=True)
+#             elif obj[0] is 'Classifier':
+#                 clf_inner_best = base.clone(obj[1], safe=True)
+#                 fi = obj[1].feature_importances_
 
-        # Get top features
-        nfeat = np.sum(fi>0)
-        fidx = np.argsort(fi)[:-nfeat-1:-1]
-        FI.append(fi)
-        FX.append(fidx)
+#         # Get top features
+#         nfeat = np.sum(fi>0)
+#         fidx = np.argsort(fi)[:-nfeat-1:-1]
+#         FI.append(fi)
+#         FX.append(fidx)
         
-        # Set up outer CV lop
-        pipeline_outer = Pipeline(memory=None,
-                                  steps=[('Scaler', ssc_inner_best),
-                                         ('Classifier', clf_outer)])
+#         # Set up outer CV lop
+#         pipeline_outer = Pipeline(memory=None,
+#                                   steps=[('Scaler', ssc_inner_best),
+#                                          ('Classifier', clf_outer)])
         
-        outer_params = [{'Classifier__kernel': ['rbf'],
-                         'Classifier__degree': [2],
-                         'Classifier__gamma': [1e-2, 1e-1, 1],
-                         'Classifier__C': [0.01, 0.1, 1, 10, 100]},
-                        {'Classifier__kernel':['poly'],
-                         'Classifier__degree': [2,3],
-                         'Classifier__gamma': ['scale'],
-                         'Classifier__C': [0.01, 0.1, 1, 10, 100]}]
+#         outer_params = [{'Classifier__kernel': ['rbf'],
+#                          'Classifier__degree': [2],
+#                          'Classifier__gamma': [1e-2, 1e-1, 1],
+#                          'Classifier__C': [0.01, 0.1, 1, 10, 100]},
+#                         {'Classifier__kernel':['poly'],
+#                          'Classifier__degree': [2,3],
+#                          'Classifier__gamma': ['scale'],
+#                          'Classifier__C': [0.01, 0.1, 1, 10, 100]}]
         
-        # set test set manually
-        outer_split = -np.ones((len(idx),))
-        outer_split[test_outer] = 0
+#         # set test set manually
+#         outer_split = -np.ones((len(idx),))
+#         outer_split[test_outer] = 0
         
-        # Run outer CV loop
-        grid_outer = GridSearchCV(pipeline_outer, outer_params, cv=PredefinedSplit(outer_split), 
-                                  scoring=scoring, verbose=False, n_jobs=-1)#, refit=False)
+#         # Run outer CV loop
+#         grid_outer = GridSearchCV(pipeline_outer, outer_params, cv=PredefinedSplit(outer_split), 
+#                                   scoring=scoring, verbose=False, n_jobs=-1)#, refit=False)
         
-        grid_outer.fit(X[:,fidx], Y)
-        SC.append(grid_outer.best_score_)
+#         grid_outer.fit(X[:,fidx], Y)
+#         SC.append(grid_outer.best_score_)
         
-        # return predicted
-        for obj in grid_outer.best_estimator_.steps:
-            if obj[0] is 'Scaler':
-                ssc_outer_best = base.clone(obj[1], safe=True)
-            elif obj[0] is 'Feature_sel':
-                sel_outer_best = base.clone(obj[1], safe=True)
-            elif obj[0] is 'Classifier':
-                clf_outer_best = base.clone(obj[1], safe=True)
+#         # return predicted
+#         for obj in grid_outer.best_estimator_.steps:
+#             if obj[0] is 'Scaler':
+#                 ssc_outer_best = base.clone(obj[1], safe=True)
+#             elif obj[0] is 'Feature_sel':
+#                 sel_outer_best = base.clone(obj[1], safe=True)
+#             elif obj[0] is 'Classifier':
+#                 clf_outer_best = base.clone(obj[1], safe=True)
                 
         
-        pipeline_opt = Pipeline(memory=None,
-                                steps=[('Scaler', ssc_outer_best),
-                                       ('Classifier', clf_outer_best)])
+#         pipeline_opt = Pipeline(memory=None,
+#                                 steps=[('Scaler', ssc_outer_best),
+#                                        ('Classifier', clf_outer_best)])
             
-        pipeline_opt.fit(Xtrain[:,fidx], Ytrain)
-        yhat = pipeline_opt.predict(Xtest[:,fidx])
+#         pipeline_opt.fit(Xtrain[:,fidx], Ytrain)
+#         yhat = pipeline_opt.predict(Xtest[:,fidx])
 
-        YH.append(yhat)        
-        CM.append(metrics.confusion_matrix(Ytest-1, yhat-1))#, ['HC','MCI','AD']))  
-        YT.append(Ytest)
-        TI.append(test_outer)
+#         YH.append(yhat)        
+#         CM.append(metrics.confusion_matrix(Ytest-1, yhat-1))#, ['HC','MCI','AD']))  
+#         YT.append(Ytest)
+#         TI.append(test_outer)
         
-        print(grid_outer.best_score_)
-    return SC, FI, FX, CM, YH, YT, TI 
+#         print(grid_outer.best_score_)
+#     return SC, FI, FX, CM, YH, YT, TI 
 
 def NestedCV_SVM__(X, Y, varnames):
     '''
@@ -1022,37 +1022,37 @@ def extendFeatureNames(varnames, regions, volnames):
             names.extend([var+'_'+regions[i] for i in range(n)])
     return names
 
-def plot_FeatureFrequency_Top(Xdict, FI, FX, varnames, title=None):
-    # Get feature names    
-    X = np.concatenate([Xdict[features] for features in varnames], axis=1) 
-    Xclean, featurenames = clean_features(X, extendFeatureNames(varnames, regions, volnames))    
+# def plot_FeatureFrequency_Top(Xdict, FI, FX, varnames, title=None):
+#     # Get feature names    
+#     X = np.concatenate([Xdict[features] for features in varnames], axis=1) 
+#     Xclean, featurenames = clean_features(X, extendFeatureNames(varnames, regions, volnames))    
 
-    # Selected Feature Historgram
-    fidx = [idx for cvrun in FX for idx in cvrun]
-    tmp = [x[0][x[1]] for x in zip(FI,FX)]
-    fimp = [imp for x in tmp for imp in x]
-    fcount = np.bincount(fidx, minlength=len(FI[0]))[0:]
+#     # Selected Feature Historgram
+#     fidx = [idx for cvrun in FX for idx in cvrun]
+#     tmp = [x[0][x[1]] for x in zip(FI,FX)]
+#     fimp = [imp for x in tmp for imp in x]
+#     fcount = np.bincount(fidx, minlength=len(FI[0]))[0:]
     
-    n50 = np.sum(fcount>50)
-    sortInd = fcount.argsort()[-n50:][::-1]
-    fcount_sort = fcount[sortInd]
+#     n50 = np.sum(fcount>50)
+#     sortInd = fcount.argsort()[-n50:][::-1]
+#     fcount_sort = fcount[sortInd]
     
-    fname_sort = [featurenames[i] if featurenames[i].startswith('Volume') else featurenames[i][:-4] for i in sortInd]
-#    region_sort = [regions[i][:-4] for i in sortInd]
+#     fname_sort = [featurenames[i] if featurenames[i].startswith('Volume') else featurenames[i][:-4] for i in sortInd]
+# #    region_sort = [regions[i][:-4] for i in sortInd]
 
-    fig, ax = plt.subplots()
-    fig.set_size_inches(20,14)
+#     fig, ax = plt.subplots()
+#     fig.set_size_inches(20,14)
 
-    plt.bar(np.arange(0, len(fcount_sort)), fcount_sort)
-    plt.xticks(range(len(fcount_sort)), fname_sort, rotation=90, fontsize=16)
-#            plt.xlim([-1, n+1])
-    plt.tick_params(axis='x',direction='in',pad=-350)
-    plt.gcf().subplots_adjust(bottom=0.2)
+#     plt.bar(np.arange(0, len(fcount_sort)), fcount_sort)
+#     plt.xticks(range(len(fcount_sort)), fname_sort, rotation=90, fontsize=16)
+# #            plt.xlim([-1, n+1])
+#     plt.tick_params(axis='x',direction='in',pad=-350)
+#     plt.gcf().subplots_adjust(bottom=0.2)
     
-    plt.title('Feature Selection Frequency ({})'.format(title), fontsize=14)
-    plt.tight_layout()
-    plt.savefig('Feature_Selection_Frequency_{}.png'.format(title), 
-                bbox_inches='tight', pad_inches=0.1, dpi=400)
+#     plt.title('Feature Selection Frequency ({})'.format(title), fontsize=14)
+#     plt.tight_layout()
+#     plt.savefig('Feature_Selection_Frequency_{}.png'.format(title), 
+#                 bbox_inches='tight', pad_inches=0.1, dpi=400)
 
  
 plot_FeatureFrequency_Top(Xdict, FI1, FX1, emp_varnames, title='Empirical') 
