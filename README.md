@@ -1,6 +1,6 @@
 # linhopf_fdt_adni
 
-This repository contains the code to produce the results presented in my MSc thesis "An analytic application of the Fluctuation-Dissipation Theorem in Alzheimer’s Disease using the Linear Hopf Model". The thesis uses two approaches to compute the FDT violation metric: model-free and model-based analytical. The model used in this study is the linear Hopf model. Furthermore, a RF+SVM classifier is used in the analysis.
+This repository contains the code to produce the results presented in my [MSc thesis](MSc_Thesis.pdf) "An analytic application of the Fluctuation-Dissipation Theorem in Alzheimer’s Disease using the Linear Hopf Model". The thesis uses two approaches to compute the FDT violation metric: model-free and model-based analytical. The model used in this study is the linear Hopf model. Furthermore, a RF+SVM classifier is used in the analysis.
 
 The repo contains 6 main scripts:
 - compute_linhopf.py: implements the linear Hopf model (data from ADNI-B_DATA)
