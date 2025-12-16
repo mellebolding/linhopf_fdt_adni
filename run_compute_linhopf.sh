@@ -8,14 +8,14 @@
 #SBATCH --mem=2G                        # Memory per node (adjust as needed)
 #SBATCH --mail-type=END,FAIL            # Notifications for job done or fail (optional)
 
-# Activate your virtual environment
+# Activate virtual environment
 source /home/cluster/melle/FDT_ADNI/venv/bin/activate
 
 export MPLCONFIGDIR=/tmp/mplconfig_$SLURM_JOB_ID
 mkdir -p $MPLCONFIGDIR
 
-# Go to your script directory (optional but clean)
+# script directory 
 cd /home/cluster/melle/linhopf_fdt_adni
 
-# Run your Python script
+# Run Python script
 python compute_linhopf.py

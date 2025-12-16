@@ -11,8 +11,8 @@ from enum import Enum
 from typing import Union
 
 class FiltPowSpetraVersion(Enum):
-    v2021 = "v2021" # This is now the default one (from Irene's code)
-    v2015 = "v2015" # This was the original version implemented (from Victor Saenger code)
+    v2021 = "v2021" # This is now the default one 
+    v2015 = "v2015" # This was the original version implemented 
 
 def conv(u: np.ndarray, v: np.ndarray):  # python equivalent to matlab conv 'same' method
     # from https://stackoverflow.com/questions/38194270/matlab-convolution-same-to-numpy-convolve
@@ -137,7 +137,7 @@ def filt_pow_spetra_multiple_subjects(
     elif version == FiltPowSpetraVersion.v2015:
         PowSpect_filt_narrow = np.zeros((n_subjects, int(np.floor(tmax / 2)), n_nodes))
         for s in range(n_subjects):
-            PowSpect_filt_narrow[s] = filt_pow_spetra(signal[s, :, :], tr, bpf, version)
+            PowSpect_filt_narrow[s] = filt_pow_spetra(signal[s, :, :], tr, version)
         Power_Areas_filt_narrow_unsmoothed = np.mean(PowSpect_filt_narrow, axis=0)  # (freqs, regions)
 
         Power_Areas_filt_narrow_smoothed = np.zeros_like(Power_Areas_filt_narrow_unsmoothed)

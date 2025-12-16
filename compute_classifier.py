@@ -289,13 +289,13 @@ def nestedCV(Xdict, Y, varnames):
 
 
 # ==================== DATA SETUP ====================
-model_type = 'modelbased'
+model_type = 'modelfree'
 if model_type == 'modelbased':
     filename = f"FDT_results_DL_B2_N400_sigTrue_aTrue_filt.npz"
-    output_file = 'nested_cv_results_modelbased.npz'
+    output_file = 'data/CLASSIFIER_DATA/nested_cv_results_modelbased.npz'
 if model_type == 'modelfree':
     filename = f"FDT_results_DL_B2_N400_modelfree.npz"
-    output_file = 'nested_cv_results_modelfree.npz'
+    output_file = 'data/CLASSIFIER_DATA/nested_cv_results_modelfree.npz'
 
 filt=True
 repo_root = os.getcwd() 

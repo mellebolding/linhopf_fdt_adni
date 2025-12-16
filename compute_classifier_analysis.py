@@ -150,13 +150,17 @@ def plot_FeatureFrequency_Top(FI, FX, FN, feature_names_all, title=None):
     ax.legend(handles=legend_elements, loc='upper right')
     
     plt.tight_layout()
-    plt.savefig(f'Feature_Selection_Frequency_{title}.png', 
-                bbox_inches='tight', dpi=400)
+
+    save_path = os.path.join(os.getcwd(), "data", "RESULT_PLOTS")
+    os.makedirs(save_path, exist_ok=True)
+    title_safe = str(title) if title else "untitled"
+    filename = os.path.join(save_path, f'Feature_Selection_Frequency_{title_safe}.png')
+    plt.savefig(filename)
     plt.show()
     
-    # Save detailed results to Excel
-    df_features.to_excel(f'Feature_Importance_Detailed_{title}.xlsx', index=False)
-    print(f"\nDetailed results saved to: Feature_Importance_Detailed_{title}.xlsx")
+    excel_filename = os.path.join(save_path, f'Feature_Importance_Detailed_{title_safe}.xlsx')
+    df_features.to_excel(excel_filename, index=False)
+    print(f"\nDetailed results saved to: {excel_filename}")
     
     return df_features
 
@@ -208,6 +212,10 @@ def plot_confusion_matrix(y_true, y_pred, classes, normalize=False):#, title=Non
                     ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
+    save_path = os.path.join(os.getcwd(), "data", "RESULT_PLOTS")
+    os.makedirs(save_path, exist_ok=True)
+    filename = os.path.join(save_path, "accscores.png")
+    plt.savefig(filename)
     plt.show()
     return None
 
@@ -309,8 +317,10 @@ def plotScores(scores, stype='f1'):
     
     print(f"{'='*60}\n")
 
-    savename = f'NestedCV_Performance_{stype}_Significance.png'
-    plt.savefig(savename, bbox_inches='tight', dpi=300)
+    save_path = os.path.join(os.getcwd(), "data", "RESULT_PLOTS")
+    os.makedirs(save_path, exist_ok=True)
+    filename = os.path.join(save_path, "F1scores.png")
+    plt.savefig(filename)
     plt.show()
 
 def extendFeatureNames(varnames, regions, volnames):
@@ -593,14 +603,10 @@ def brain_map_feature_importance(df_features,
         fig.suptitle(title_text, fontsize=16, fontweight='bold', y=0.98)
         
         # ==================== SAVE ====================
-        if save_path:
-            os.makedirs(save_path, exist_ok=True)
-            
-            fig_name = f"brainmap_{modality}_{metric}.png"
-            full_path = os.path.join(save_path, fig_name)
-            
-            plt.savefig(full_path, dpi=300, bbox_inches='tight')
-            print(f"Saved to: {full_path}")
+        save_path = os.path.join(os.getcwd(), "data", "RESULT_PLOTS")
+        os.makedirs(save_path, exist_ok=True)
+        filename = os.path.join(save_path, f"brain_plot_regions_{modality}.png")
+        plt.savefig(filename)
         
         plt.show()
         plt.close(fig)
@@ -613,9 +619,9 @@ def brain_map_feature_importance(df_features,
 
 modeltype = 'modelfree'
 if modeltype == 'modelbased':
-    loaded_data = np.load('nested_cv_results_modelbased.npz', allow_pickle=True)
+    loaded_data = np.load('data/CLASSIFIER_DATA/nested_cv_results_modelbased.npz', allow_pickle=True)
 if modeltype == 'modelfree':
-        loaded_data = np.load('nested_cv_results_modelfree.npz', allow_pickle=True)
+        loaded_data = np.load('data/CLASSIFIER_DATA/nested_cv_results_modelfree.npz', allow_pickle=True)
 
 # Access variables
 sf1 = loaded_data['sf1']
@@ -653,23 +659,23 @@ print("Data loaded successfully.")
 group_classes = ['HC', 'MCI(AB+)', 'AD']
 
 ### Fig. 4.3.2: Confusion matrices
-# plot_confusion_matrix(np.sum(CM1,axis=0), None, normalize=True, classes=np.array(group_classes))
-# plot_confusion_matrix(np.sum(CM2,axis=0), None, normalize=True, classes=np.array(group_classes))
-# plot_confusion_matrix(np.sum(CM3,axis=0), None, normalize=True, classes=np.array(group_classes))
+plot_confusion_matrix(np.sum(CM1,axis=0), None, normalize=True, classes=np.array(group_classes))
+plot_confusion_matrix(np.sum(CM2,axis=0), None, normalize=True, classes=np.array(group_classes))
+plot_confusion_matrix(np.sum(CM3,axis=0), None, normalize=True, classes=np.array(group_classes))
 
 ### Fig. 4.3.3AB: Feature importance analysis
-# df_emp = plot_FeatureFrequency_Top(FI1, FX1, FN1, feat_names1, title='Empirical')
-# df_sim = plot_FeatureFrequency_Top(FI2, FX2, FN2, feat_names2, title='Simulated')
-# df_com = plot_FeatureFrequency_Top(FI3, FX3, FN3, feat_names3, title='Combined')
+df_emp = plot_FeatureFrequency_Top(FI1, FX1, FN1, feat_names1, title='Empirical')
+df_sim = plot_FeatureFrequency_Top(FI2, FX2, FN2, feat_names2, title='Simulated')
+df_com = plot_FeatureFrequency_Top(FI3, FX3, FN3, feat_names3, title='Combined')
 
 ### Fig. 4.3.3CD: F1 scores with significance
-# plotScores([sf1,sf2,sf3], stype='f1')
+plotScores([sf1,sf2,sf3], stype='f1')
 
 ### Fig. 4.3.4: Brain maps of feature importance
-# brain_map_feature_importance(
-#     df_com,
-#     modalities=['Tau','ABeta','I_norm2'],
-#     metric='Mean_Importance',
-#     vmin=0,
-#     vmax=0.025,
-# )
+brain_map_feature_importance(
+    df_com,
+    modalities=['Tau','ABeta','I_norm2'],
+    metric='Mean_Importance',
+    vmin=0,
+    vmax=0.025,
+)

@@ -10,7 +10,6 @@ OUTPUTS:
       [subject_id, group, f_diff, SC, EC, fitted sigma, fitted a, fit metrics]
 """
 
-
 import os
 import json
 import time
@@ -23,7 +22,7 @@ import src.functions_frameworks.LinHopfFit as LinHopfFit
 
 
 ### MAIN INPUT PARAMETERS (other parameters in json file)
-DL_type = 'DL_B2' # specific data loader with groups HC, MCI(AB-), MCI(AB+), AD
+DL_type = 'DL_B2' # specific data loader with groups HC, MCI(AB+), AD
 filt = True # use filtered data or not
 NPARCELLS = 400 # number of parcels to use
 fit_sigma = True # whether to fit sigma parameter
@@ -41,7 +40,7 @@ with open("hyperparams.json", "r") as f:
 if DL_type == 'DL_B1':
     DL = ADNI_B.ADNI_B_Alt(['HC', 'AD'],filt=filt)
 if DL_type == 'DL_B2':
-    DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB-)', 'MCI(AB+)', 'AD'],filt=filt)
+    DL = ADNI_B.ADNI_B_Alt(['HC', 'MCI(AB+)', 'AD'],filt=filt)
 if DL_type == 'DL_B3':
     DL = ADNI_B.ADNI_B_Alt(['HC(AB-)', 'HC(AB+)', 'MCI(AB-)', 'MCI(AB+)', 'AD'],filt=filt)
 

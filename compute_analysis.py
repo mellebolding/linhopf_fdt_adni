@@ -26,9 +26,6 @@ from src.analysis.plot_functions import (
     radarplot,
 )
 
-# Example Parameters (Adjust to your actual data)
-RSNs = ['Vis','SalVentAttn', 'SomMot', 'DorsAttn', 'Limbic', 'Cont', 'Def']
-
 
 # Data parameters
 DL_type = 'DL_B2'
@@ -59,13 +56,13 @@ df_free = loadProteins(df_free, DL_type, 'Tau', repo_root,filt=True)
 add_parcel_info_to_df(df_based, NPARCELLS, os.path.join(repo_root, 'hyperparams.json'))
 add_parcel_info_to_df(df_free, NPARCELLS,  os.path.join(repo_root, 'hyperparams.json'))
 
-
-df_based = df_based[:-4]
+df_based = df_based[:-4] # remove last 4 entries with incomplete data
 df_based.reset_index(drop=True, inplace=True)
 
 ### ANALYSIS PLOTS ###
 df = df_based # model-free: df_free; model-based: df_based
 measure = 'I_norm2' # 'I_norm2', 'Tau', 'ABeta'
+RSNs = ['Vis','SalVentAttn', 'SomMot', 'DorsAttn', 'Limbic', 'Cont', 'Def']
 
 ### rearrange data for subject average RSN plots (needed for Fig. A6.2 and Fig. 4.2.4)
 rsn_sub_df = aggregate_all_rsns_for_plotting(
@@ -75,68 +72,69 @@ rsn_sub_df = aggregate_all_rsns_for_plotting(
 )
 
 ### Fig. 1.0.1: Amyloid-beta and Tau values between groups
-# subject_comparison(df, measure='ABeta', model_type='modelbased', NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, save_path_plot=save_path_plot, rsn_name='All')
-# subject_comparison(df, measure='Tau', model_type='modelbased', NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, save_path_plot=save_path_plot, rsn_name='All')
+subject_comparison(df, measure='ABeta', model_type='modelbased', NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, save_path_plot=save_path_plot, rsn_name='All')
+subject_comparison(df, measure='Tau', model_type='modelbased', NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, save_path_plot=save_path_plot, rsn_name='All')
 
 ### Fig. 2.2.1: Empirical vs Simulated FC/COVtau comparisons
-# emp_sim_triangles(DL_type=DL_type, NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, joint_normalization=True, n_conditions=4)
+emp_sim_triangles(DL_type=DL_type, NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, joint_normalization=True, n_conditions=4)
 
 ### Fig. 2.2.2: Ceff matrices per group
-# plot_ceff_matrices(df, groups=['HC', 'MCI(AB+)', 'AD'], n_parcels=NPARCELLS)
+plot_ceff_matrices(df, groups=['HC', 'MCI(AB+)', 'AD'], n_parcels=NPARCELLS)
 
 ### Fig. 4.1.1: Violin plots of subject and parcel comparisons
-# results = plot_violin_groups_with_significance(
-#     df_data=df,
-#     measure_col_name=measure,
-#     group_col_name='group',
-#     comparisons=[
-#         ('HC', 'MCI(AB+)'),
-#         ('HC', 'AD'),
-#         ('MCI(AB+)', 'AD')
-#     ],
-#     measure_display_name='Integral violation [subject average]',
-#     save_path='./results/plots')
-# plot_violin_groups_with_significance_parcel_mean(
-#     df_data=df,
-#     measure_col_name=measure,
-#     comparisons=[
-#         ('HC', 'MCI(AB+)'),
-#         ('HC', 'AD'),
-#         ('MCI(AB+)', 'AD')
-#     ],
-#     measure_display_name='Integral violation [parcel average]',
-#     save_path='./results/plots',
-#     n_permutations=10000
-# )
+results = plot_violin_groups_with_significance(
+    df_data=df,
+    measure_col_name=measure,
+    group_col_name='group',
+    comparisons=[
+        ('HC', 'MCI(AB+)'),
+        ('HC', 'AD'),
+        ('MCI(AB+)', 'AD')
+    ],
+    measure_display_name='Integral violation [subject average]',
+    save_path='./results/plots')
+plot_violin_groups_with_significance_parcel_mean(
+    df_data=df,
+    measure_col_name=measure,
+    comparisons=[
+        ('HC', 'MCI(AB+)'),
+        ('HC', 'AD'),
+        ('MCI(AB+)', 'AD')
+    ],
+    measure_display_name='Integral violation [parcel average]',
+    save_path='./results/plots',
+    n_permutations=10000
+)
 
 ### Fig. 4.2.1: 3D scatter plot
-# scatter_plot_3d(df)
+scatter_plot_3d(df)
 
 ### Fig. 4.2.2: Brain maps of group averages
-# brain_map_parcel_average(
-#     df=df,
-#     measure=measure,
-#     group='HC',
-#     cmap='viridis', #tau:inferno, abeta:RdYlBu, int:viridis
-#     save_path='./plots',
-#     vmax=0.09, #tau:2.3, int:0.09, abeta:120
-#     vmin=0.01  #tau:0.7, int:0.01, abeta:-45
-# )
+brain_map_parcel_average(
+    df=df,
+    measure=measure,
+    group='HC',
+    cmap='viridis', #tau:inferno, abeta:RdYlBu, int:viridis
+    save_path='./plots',
+    vmax=0.09, #tau:2.3, int:0.09, abeta:120
+    vmin=0.01  #tau:0.7, int:0.01, abeta:-45
+)
 
 ### Fig. 4.2.3: Brain maps of correlations between measures
-# corrs, pvals, top = brain_map_correlation(
-#     df, mode='between_measures',
-#     measure1='I_norm2', measure2='Tau',
-#     #group1='AD',
-#     cmap='cividis')
-# plot_correlation_histogram(
-#     corrs, pvals,
-#     title='I_norm2 vs Tau',
-#     save_path=os.path.join(save_path_plot, 'corr_hist_i_norm2_tau_ad.png')
-# )
+corrs, pvals, top = brain_map_correlation(
+    df, mode='between_measures',
+    measure1='I_norm2', measure2='Tau',
+    #group1='AD',
+    cmap='cividis')
+plot_correlation_histogram(
+    corrs, pvals,
+    title='I_norm2 vs Tau',
+    save_path=os.path.join(save_path_plot, 'corr_hist_i_norm2_tau_ad.png')
+)
 
 ### Fig. 4.2.4: Violin plots of RSN comparisons for subject and parcel averages
 plot_multi_rsn_split_violin(
+    df = df,
     plot_df=rsn_sub_df,
     rsn_order=RSNs,
     groups_order=['HC', 'AD'],
@@ -150,6 +148,7 @@ plot_ready_df_rsn = aggregate_all_rsns_for_plotting_parcel_avg(
     rsn_names_list=RSNs
 )
 plot_multi_rsn_split_violin(
+    df=df,
     plot_df=plot_ready_df_rsn,
     rsn_order=RSNs,
     groups_order=['HC', 'AD'],
@@ -180,11 +179,11 @@ brain_map_difference(
 radarplot(rsn_sub_df,RSNs)
 
 ### Fit statistics:
-# corr_fc_values = df_based['losses'].apply(lambda d: d['corr_fc'])
-# COVtau_corr_values = df_based['losses'].apply(lambda d: d['corr_covtau'])
-# mse_fc_values = df_based['losses'].apply(lambda d: d['mse_fc'])
-# mse_COVtau_values = df_based['losses'].apply(lambda d: d['mse_covtau'])
-# print(f"Correlation FC values:\n{1-corr_fc_values.mean()} ± {corr_fc_values.std()}")
-# print(f"Correlation COVtau values:\n{1-COVtau_corr_values.mean()} ± {COVtau_corr_values.std()}")
-# print(f"MSE FC values:\n{mse_fc_values.mean()} ± {mse_fc_values.std()}")
-# print(f"MSE COVtau values:\n{mse_COVtau_values.mean()} ± {mse_COVtau_values.std()}")
+corr_fc_values = df_based['losses'].apply(lambda d: d['corr_fc'])
+COVtau_corr_values = df_based['losses'].apply(lambda d: d['corr_covtau'])
+mse_fc_values = df_based['losses'].apply(lambda d: d['mse_fc'])
+mse_COVtau_values = df_based['losses'].apply(lambda d: d['mse_covtau'])
+print(f"Correlation FC values:\n{1-corr_fc_values.mean()} ± {corr_fc_values.std()}")
+print(f"Correlation COVtau values:\n{1-COVtau_corr_values.mean()} ± {COVtau_corr_values.std()}")
+print(f"MSE FC values:\n{mse_fc_values.mean()} ± {mse_fc_values.std()}")
+print(f"MSE COVtau values:\n{mse_COVtau_values.mean()} ± {mse_COVtau_values.std()}")

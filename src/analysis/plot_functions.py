@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import json
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, FixedLocator
 import seaborn as sns
 import scipy.stats as stats
 
@@ -617,7 +617,7 @@ def plot_violin_groups_with_significance_parcel_mean(
     plt.show()
     plt.close(fig)
 
-def plot_multi_rsn_split_violin(plot_df: pd.DataFrame, rsn_order: list, groups_order: list, 
+def plot_multi_rsn_split_violin(df, plot_df: pd.DataFrame, rsn_order: list, groups_order: list, 
                           measure_name: str, y_label_override=None, 
                           palette=None, dpi=300, save_path=None, 
                           n_permutations=10000, test_type='permutation'):
@@ -1140,6 +1140,8 @@ def brain_map_difference(df, measure: str, group1: str, group2: str,
     from nilearn.datasets import load_fsaverage
     from nilearn.surface import SurfaceImage
     from nilearn.datasets import load_fsaverage_data
+    from matplotlib.ticker import FixedLocator
+
     
     # Get both groups
     df1 = df[df['group'] == group1]
@@ -1272,7 +1274,6 @@ def brain_map_difference(df, measure: str, group1: str, group2: str,
     cbar_ax = fig.add_axes([0.5, 0.29, 0.015, 0.46]) 
     cbar = plt.colorbar(sm, cax=cbar_ax, orientation='vertical') 
     cbar.set_label('', fontsize=22, labelpad=10, fontweight='bold')
-    #cbar.locator = MaxNLocator(nbins=3)  
     cbar.locator = FixedLocator([0,1]) 
     cbar.ax.tick_params(labelsize=14, labelcolor='black',labelleft=True, labelright=False, left=True, right=False)  # fontweight is not set here
     for tick in cbar.ax.get_yticklabels():  # loop through tick labels
