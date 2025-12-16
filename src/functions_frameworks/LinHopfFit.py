@@ -1,12 +1,22 @@
+"""
+This script implements the Linear Hopf model fitting using the Adam optimizer.
+The main fitting function is called: 'fit' and is part of the accessor function 'fit_linhopf'.
+
+The pipeline of the 'fit' function is as follows:
+  - Defining the optimizer and loss function
+  - Computing empirical FC, COV, COVtau from time series data
+  - Define initial values
+  - Fitting loop: (1) compute simulated EC through FC and COVtau, 
+                  (2) compute loss and gradients, 
+                  (3) update parameters and apply constraints
+  - Return fitted parameters and compute final simulated FC and COVtau
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.linalg import expm, solve_sylvester
-from scipy.signal import correlate
-from scipy.optimize import minimize, differential_evolution
-from scipy import stats
+from scipy.linalg import solve_sylvester
 from numba import njit, prange, jit
-from typing import Dict, List, Tuple, Optional, Union, Any
-import warnings
+from typing import Dict, Union
 
 # ==================== Core Numba Functions ====================
 @njit
@@ -104,7 +114,7 @@ class LossManager:
     def __init__(self, loss_weights: Dict[str, float] = None):
         """
         Args:
-            loss_weights: Dictionary with keys 'mse_fc', 'mse_covtau', 'corr_fc', 'corr_covtau', 'ks'
+            loss_weights: Dictionary with keys 'mse_fc', 'mse_covtau', 'corr_fc', 'corr_covtau'
         """
         self.weights = loss_weights or {'mse_fc': 0.5, 'mse_covtau': 0.5}
         self.history = {k: [] for k in self.weights.keys()}
@@ -136,12 +146,6 @@ class LossManager:
             corr = np.corrcoef(COVtauemp[i, j], COVtausim[i, j])[0, 1]
             losses['corr_covtau'] = 1 - corr if np.isfinite(corr) else 1.0
             total_loss += self.weights['corr_covtau'] * losses['corr_covtau']
-        
-        # KS test
-        if 'ks' in self.weights:
-            ks_stat, _ = stats.ks_2samp(FCemp[i, j], FCsim[i, j])
-            losses['ks'] = ks_stat
-            total_loss += self.weights['ks'] * losses['ks']
         
         return total_loss, losses
     
@@ -184,20 +188,6 @@ class Optimizer:
         """Perform optimization step based on method"""
         if self.method == 'adam':
             return self._adam_step(params, grads)
-        elif self.method == 'gradient_descent':
-            return self._gd_step(params, grads)
-        elif self.method == 'lbfgs':
-            return self._lbfgs_step(params, grads, model)
-        elif self.method == 'particle_swarm':
-            return self._pso_step(params, model)
-        elif self.method == 'differential_evolution':
-            return self._de_step(params, model)
-        elif self.method == 'hybrid_swarm_adam':
-            # Use PSO for first half, then switch to Adam
-            if self.state['t'] < 500:
-                return self._pso_step(params, model)
-            else:
-                return self._adam_step(params, grads)
         else:
             raise ValueError(f"Unknown optimization method: {self.method}")
     
@@ -237,175 +227,6 @@ class Optimizer:
             self.params['epsilon'], t
         )
         
-        return Ceff_new, sigma_new, a_new
-    
-    def _gd_step(self, params, grads):
-        """Gradient descent step"""
-        Ceff, sigma, a = params
-        grad_Ceff, grad_sigma, grad_a = grads
-        
-        Ceff_new = Ceff - self.params['lr_Ceff'] * grad_Ceff
-        sigma_new = sigma - self.params['lr_sigma'] * grad_sigma
-        a_new = a - self.params['lr_a'] * grad_a
-        
-        return Ceff_new, sigma_new, a_new
-    
-    def _lbfgs_step(self, params, grads, model):
-        """L-BFGS step using scipy"""
-        Ceff, sigma, a = params
-        
-        def objective(x):
-            # Unpack parameters
-            n = model.n_parcels
-            Ceff_flat = x[:n*n]
-            sigma_vals = x[n*n:n*n+n]
-            a_vals = x[n*n+n:]
-            
-            Ceff_test = Ceff_flat.reshape(n, n)
-            # Apply constraints
-            Ceff_test = model._apply_Ceff_constraints(Ceff_test)
-            
-            # Compute loss
-            FCsim, COVsim, COVsimtotal, A = model._hopf_int(Ceff_test, sigma_vals, a_vals)
-            COVtausim = model._compute_covtau(COVsimtotal, A, COVsim)
-            
-            loss, _ = model.loss_manager.compute_loss(
-                model.FCemp, FCsim, model.COVtauemp, COVtausim
-            )
-            return loss
-        
-        # Pack current parameters
-        x0 = np.concatenate([Ceff.flatten(), sigma, a])
-        
-        # Run L-BFGS
-        result = minimize(objective, x0, method='L-BFGS-B', options={'maxiter': 4})
-        
-        # Unpack results
-        n = model.n_parcels
-        Ceff_new = result.x[:n*n].reshape(n, n)
-        sigma_new = result.x[n*n:n*n+n]
-        a_new = result.x[n*n+n:]
-        
-        return Ceff_new, sigma_new, a_new
-    
-    def _pso_step(self, params, model):
-        """Particle Swarm Optimization step"""
-        if 'particles' not in self.state:
-            self._init_pso(params, model)
-        
-        particles = self.state['particles']
-        velocities = self.state['velocities']
-        pbest = self.state['pbest']
-        pbest_scores = self.state['pbest_scores']
-        gbest = self.state['gbest']
-        
-        # Update each particle
-        for i in range(self.params['n_particles']):
-            # Update velocity
-            r1, r2 = np.random.random(2)
-            velocities[i] = (self.params['w'] * velocities[i] +
-                           self.params['c1'] * r1 * (pbest[i] - particles[i]) +
-                           self.params['c2'] * r2 * (gbest - particles[i]))
-            
-            # Update position
-            particles[i] += velocities[i]
-            
-            # Evaluate
-            Ceff_test, sigma_test, a_test = self._unpack_particle(particles[i], model)
-            FCsim, COVsim, COVsimtotal, A = model._hopf_int(Ceff_test, sigma_test, a_test)
-            COVtausim = model._compute_covtau(COVsimtotal, A, COVsim)
-            
-            score, _ = model.loss_manager.compute_loss(
-                model.FCemp, FCsim, model.COVtauemp, COVtausim
-            )
-            
-            # Update personal best
-            if score < pbest_scores[i]:
-                pbest[i] = particles[i].copy()
-                pbest_scores[i] = score
-                
-                # Update global best
-                if score < self.state['gbest_score']:
-                    self.state['gbest'] = particles[i].copy()
-                    self.state['gbest_score'] = score
-        
-        # Return global best
-        return self._unpack_particle(self.state['gbest'], model)
-    
-    def _init_pso(self, params, model):
-        """Initialize PSO particles"""
-        Ceff, sigma, a = params
-        n_particles = self.params['n_particles']
-        
-        # Initialize particles around current solution
-        particles = []
-        for _ in range(n_particles):
-            particle = np.concatenate([
-                Ceff.flatten() + np.random.randn(*Ceff.shape).flatten() * 0.01,
-                sigma + np.random.randn(*sigma.shape) * 0.01,
-                a + np.random.randn(*a.shape) * 0.001
-            ])
-            particles.append(particle)
-        
-        self.state['particles'] = np.array(particles)
-        self.state['velocities'] = np.random.randn(n_particles, len(particles[0])) * 0.001
-        self.state['pbest'] = self.state['particles'].copy()
-        self.state['pbest_scores'] = np.inf * np.ones(n_particles)
-        self.state['gbest'] = particles[0]
-        self.state['gbest_score'] = np.inf
-    
-    def _unpack_particle(self, particle, model):
-        """Unpack particle into parameters"""
-        n = model.n_parcels
-        Ceff = particle[:n*n].reshape(n, n)
-        sigma = particle[n*n:n*n+n]
-        a = particle[n*n+n:]
-        return Ceff, sigma, a
-    
-    def _de_step(self, params, model):
-        """Differential Evolution step"""
-        Ceff, sigma, a = params
-        n = model.n_parcels
-
-        def objective(x):
-            Ceff_test = x[:n*n].reshape(n, n)
-            sigma_test = x[n*n:n*n+n]
-            a_test = x[n*n+n:]
-
-            Ceff_test = model._apply_Ceff_constraints(Ceff_test)
-            FCsim, COVsim, COVsimtotal, A = model._hopf_int(Ceff_test, sigma_test, a_test)
-            COVtausim = model._compute_covtau(COVsimtotal, A, COVsim)
-
-            loss, _ = model.loss_manager.compute_loss(
-                model.FCemp, FCsim, model.COVtauemp, COVtausim
-            )
-            return loss
-
-        # Pack parameters
-        x0 = np.concatenate([Ceff.flatten(), sigma, a])
-
-        # Define bounds
-        bounds = []
-        bounds.extend([(0, 0.5)] * (n*n))       # Ceff bounds
-        bounds.extend([(0.01, 0.5)] * n)        # sigma bounds
-        bounds.extend([(-0.5, -0.001)] * n)     # a bounds
-
-        # Option 1: Let DE generate its own population (recommended)
-        result = differential_evolution(objective, bounds, maxiter=1, workers=1)
-
-        # --- Optional: initialize population around x0 (uncomment if needed) ---
-        # D = len(x0)
-        # S = max(10, 2*D)
-        # init_pop = np.tile(x0, (S, 1)) + 0.01*np.random.randn(S, D)
-        # for i, (low, high) in enumerate(bounds):
-        #     init_pop[:, i] = np.clip(init_pop[:, i], low, high)
-        # result = differential_evolution(objective, bounds, maxiter=1, init=init_pop, workers=1)
-
-        # Unpack results
-        Ceff_new = result.x[:n*n].reshape(n, n)
-        sigma_new = result.x[n*n:n*n+n]
-        a_new = result.x[n*n+n:]
-
         return Ceff_new, sigma_new, a_new
 
 
@@ -451,7 +272,7 @@ class LinearHopfModel:
             'g': kwargs.get('g', 1.0),
         }
         
-        # Initialize parameters
+        # Initial values
         self.Ceff = self.params['g'] * C
         self.sigma = np.ones(self.n_parcels) * sigma if np.isscalar(sigma) else np.array(sigma)
         self.a = np.ones(self.n_parcels) * a if np.isscalar(a) else np.array(a)
@@ -489,7 +310,7 @@ class LinearHopfModel:
         if self.loss_manager is None:
             self.setup_optimization()
         
-        # Process empirical data
+        # Compute empirical data
         self._process_empirical_data(tsdata)
         
         # Initialize parameters
@@ -573,7 +394,7 @@ class LinearHopfModel:
         return results
     
     def _process_empirical_data(self, tsdata):
-        """Process empirical time series to compute FC, COV, COVtau"""
+        """Process empirical time series to compute FC, COV, COVtau (can potentially be used for multiple subjects)"""
         if tsdata.ndim == 2:
             tsdata = tsdata[np.newaxis, :, :]
         
@@ -596,7 +417,6 @@ class LinearHopfModel:
             COVtau_all.append(COVtau)
         
         self.FCemp = np.mean(FC_all, axis=0)
-        #self.Ceff = FC  # Update C to empirical FC mean
         self.COVemp = np.mean(COV_all, axis=0)
         self.COVtauemp = np.mean(COVtau_all, axis=0)
     
@@ -621,113 +441,49 @@ class LinearHopfModel:
         COVtau *= sigratio
         return COVtau
     
-    # def _hopf_int(self, Ceff, sigma, a):
-    #     """Core Hopf integration"""
-    #     N = self.n_parcels
-    #     wo = self.f_diff * (2 * np.pi)
-        
-    #     # Build Jacobian
-    #     s = np.sum(Ceff, axis=1)
-    #     Axx = np.diag(a) - np.diag(s) + Ceff
-    #     Ayy = Axx.copy()
-    #     Ayx = np.diag(wo)
-    #     Axy = -Ayx.copy()
-        
-    #     A = np.block([[Axx, Axy], [Ayx, Ayy]])
-        
-    #     # Noise covariance
-    #     Qn = np.diag(np.concatenate([sigma**2, sigma**2]))
-        
-    #     # Solve Sylvester equation
-    #     try:
-    #         Cvth = solve_sylvester(A, A.T, -Qn)
-    #     except:
-    #         warnings.warn("Sylvester equation failed, using fallback")
-    #         Cvth = np.eye(2*N) * 0.01
-
-    #     if not np.all(np.isfinite(Cvth)):
-    #         warnings.warn("Non-finite values in Cvth")
-    #         Cvth = np.nan_to_num(Cvth, nan=0.0, posinf=1.0, neginf=-1.0)
-        
-    #     # Check eigenvalues of A for stability
-    #     eigvals = np.linalg.eigvals(A)
-    #     if np.any(eigvals.real > 0):
-    #         warnings.warn(f"Unstable system: {np.sum(eigvals.real > 0)} positive eigenvalues")
-    
-        
-    #     # Extract FC and COV
-    #     FCth = corrcov_py_numba(Cvth)
-    #     FC = FCth[:N, :N]
-    #     COV = Cvth[:N, :N]
-        
-    #     return FC, COV, Cvth, A
-    
     def _hopf_int(self, Ceff, sigma, a):
-        """Core Hopf integration with extensive diagnostics"""
+        """Hopf step with diagnostics"""
         N = self.n_parcels
         wo = self.f_diff * (2 * np.pi)
         
-        # print(f"\n=== _hopf_int diagnostics ===")
-        # print(f"Ceff range: [{np.min(Ceff):.4f}, {np.max(Ceff):.4f}], mean: {np.mean(Ceff):.4f}")
-        # print(f"sigma range: [{np.min(sigma):.4f}, {np.max(sigma):.4f}]")
-        # print(f"a range: [{np.min(a):.4f}, {np.max(a):.4f}]")
-        # print(f"wo (frequencies) range: [{np.min(wo):.4f}, {np.max(wo):.4f}]")
-        
         # Build Jacobian
         s = np.sum(Ceff, axis=1)
-        # print(f"Row sums (s) range: [{np.min(s):.4f}, {np.max(s):.4f}]")
-        
         Axx = np.diag(a) - np.diag(s) + Ceff
         Ayy = Axx.copy()
         Ayx = np.diag(wo)
         Axy = -Ayx.copy()
-        
         A = np.block([[Axx, Axy], [Ayx, Ayy]])
-        
-        # CRITICAL: Check A matrix properties
-        # print(f"\nA matrix diagnostics:")
-        # print(f"A range: [{np.min(A):.4f}, {np.max(A):.4f}]")
-        # print(f"A diagonal: [{np.min(np.diag(A)):.4f}, {np.max(np.diag(A)):.4f}]")
         
         eigvals = np.linalg.eigvals(A)
         max_real = np.max(eigvals.real)
-        min_real = np.min(eigvals.real)
-        # print(f"A eigenvalues (real part): [{min_real:.4f}, {max_real:.4f}]")
-        # print(f"Number of positive eigenvalues: {np.sum(eigvals.real > 0)}")
-        # print(f"Number near zero (|real| < 0.01): {np.sum(np.abs(eigvals.real) < 0.01)}")
-        
         # Check if system is stable
         if max_real > -0.001:
-            print("⚠️  WARNING: System is unstable or marginally stable!")
-            print("   This will cause Sylvester equation to fail or produce garbage")
+            print("WARNING: System is unstable or marginally stable!")
+            print("This will cause Sylvester equation to fail")
         
         # Noise covariance
         Qn = np.diag(np.concatenate([sigma**2, sigma**2]))
-        # print(f"\nQn (noise) diagonal range: [{np.min(np.diag(Qn)):.4f}, {np.max(np.diag(Qn)):.4f}]")
         
         # Solve Sylvester equation
         try:
             Cvth = solve_sylvester(A, A.T, -Qn)
-            # print(f"\nCvth (covariance) computed successfully")
-            # print(f"Cvth range: [{np.min(Cvth):.4f}, {np.max(Cvth):.4f}]")
-            # print(f"Cvth diagonal: [{np.min(np.diag(Cvth)):.4f}, {np.max(np.diag(Cvth)):.4f}]")
             
             # Check for numerical issues
             if not np.all(np.isfinite(Cvth)):
-                print("⚠️  ERROR: Non-finite values in Cvth!")
+                print("ERROR: Non-finite values in Cvth")
                 n_nan = np.sum(np.isnan(Cvth))
                 n_inf = np.sum(np.isinf(Cvth))
-                print(f"   NaN count: {n_nan}, Inf count: {n_inf}")
+                print(f"NaN count: {n_nan}, Inf count: {n_inf}")
             
             # Check if Cvth is positive definite
             eigvals_cvth = np.linalg.eigvals(Cvth)
             min_eig_cvth = np.min(eigvals_cvth.real)
             # print(f"Cvth min eigenvalue: {min_eig_cvth:.6f}")
             if min_eig_cvth < 0:
-                print(f"⚠️  WARNING: Cvth is not positive definite! {np.sum(eigvals_cvth.real < 0)} negative eigenvalues")
+                print(f"WARNING: Cvth is not positive definite {np.sum(eigvals_cvth.real < 0)} negative eigenvalues")
             
         except Exception as e:
-            print(f"⚠️  ERROR solving Sylvester equation: {e}")
+            print(f"ERROR solving Sylvester equation: {e}")
             # Return dummy values to continue
             Cvth = np.eye(2*N) * 0.01
         
@@ -735,16 +491,11 @@ class LinearHopfModel:
         FCth = corrcov_py_numba(Cvth)
         FC = FCth[:N, :N]
         COV = Cvth[:N, :N]
-        
-        # print(f"\nFinal FC diagnostics:")
-        # print(f"FC range: [{np.min(FC):.4f}, {np.max(FC):.4f}]")
-        # print(f"FC diagonal: [{np.min(np.diag(FC)):.4f}, {np.max(np.diag(FC)):.4f}]")
+
         fc_triu = FC[np.triu_indices_from(FC, k=1)]
-        # print(f"FC upper triangle: mean={np.mean(fc_triu):.4f}, std={np.std(fc_triu):.4f}")
-        # print(f"FC unique values (rounded to 3 decimals): {len(np.unique(np.round(fc_triu, 3)))}")
         
         if np.std(fc_triu) < 0.01:
-            print("⚠️  PROBLEM: FC is nearly uniform!")
+            print("PROBLEM: FC is nearly uniform!")
         
         return FC, COV, Cvth, A
 
@@ -778,103 +529,15 @@ class LinearHopfModel:
         # Zero diagonal
         np.fill_diagonal(Ceff, 0.0)
 
-        # **CRITICAL: Enforce row sum limits like working dataset**
-        # target_max_rowsum = self.params.get('target_row_sum', 10)
-        # row_sums = np.sum(np.abs(Ceff), axis=1)
-        # for i in range(N):
-        #     if row_sums[i] > target_max_rowsum:
-        #         Ceff[i, :] *= (target_max_rowsum / row_sums[i])
-        
-        # Final check: ensure we're in the right ballpark
-        # final_row_sums = np.sum(np.abs(Ceff), axis=1)
-        # if np.max(final_row_sums) > 0.5:  # Safety check
-        #     print(f"⚠️  Warning: row sums still too large: {np.max(final_row_sums):.4f}")
-        #     Ceff *= (0.5 / np.max(final_row_sums))
+        # Normalize row sums
+        target_max_rowsum = self.params.get('target_row_sum', 10)
+        row_sums = np.sum(np.abs(Ceff), axis=1)
+        for i in range(N):
+            if row_sums[i] > target_max_rowsum:
+                Ceff[i, :] *= (target_max_rowsum / row_sums[i])
 
         return Ceff
 
-
-    # def _apply_Ceff_constraints(self, Ceff):
-    #     """Apply structural / sign / normalization constraints to effective connectivity.
-        
-    #     Rules:
-    #     - If competitive_coupling is False: only allow (non‑negative unless allow_negative=True)
-    #       weights where structural C > 0 (keep diagonal at 0). Elsewhere force 0.
-    #     - If competitive_coupling is True: allow positive and negative values on existing
-    #       structural links (still zero where no structural connection). Rows can be
-    #       mean-centered (excluding diagonal) to encourage competition.
-    #     - Always symmetrize to keep the matrix consistent with undirected SC.
-    #     - If Ceff_norm is True: scale globally so max |Ceff| <= self.max_C.
-    #     """
-    #     Ceff = np.array(Ceff, dtype=float, copy=True)
-    #     N = self.n_parcels
-
-    #     # Structural mask (allow on structural links only)
-    #     mask = (self.C > 0)
-    #     # Always keep diagonal controllable separately (set to zero later)
-    #     np.fill_diagonal(mask, False)
-
-    #     if not self.params['competitive_coupling']:
-    #         # Zero where no SC
-    #         Ceff[~mask] = 0.0
-    #         # Clip sign
-    #         if self.params['allow_negative']:
-    #             Ceff = np.clip(Ceff, -self.params['max_C'], self.params['max_C'])
-    #         else:
-    #             Ceff = np.clip(Ceff, 0.0, self.params['max_C'])
-    #     else:
-    #         # Competitive: allow +/- on existing links, zero elsewhere
-    #         Ceff[~mask] = 0.0
-    #         # Optional row mean-centering (excluding diagonal) to promote competition
-    #         for i in range(N):
-    #             row_mask = mask[i]
-    #             if np.any(row_mask):
-    #                 mean_val = Ceff[i, row_mask].mean()
-    #                 Ceff[i, row_mask] -= mean_val
-    #         # Clip
-    #         Ceff = np.clip(Ceff, -self.params['max_C'], self.params['max_C'])
-
-    #     # Symmetrize (assume undirected SC)
-    #     #Ceff = 0.5 * (Ceff + Ceff.T)
-
-    #     # Enforce zero diagonal
-    #     np.fill_diagonal(Ceff, 0.0)
-
-    #     # Global normalization if requested
-    #     if self.params['Ceff_norm']:
-    #         max_abs = np.max(np.abs(Ceff))
-    #         if max_abs > self.params['max_C'] and max_abs > 0:
-    #             Ceff *= (self.params['max_C'] / max_abs)
-
-    #     return Ceff
-
-
-# def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
-#     """Fit model for one subject"""
-#     SC = data['SC'][:NPARCELLS, :NPARCELLS]
-#     f_diff = data['f_diff'][:NPARCELLS]
-#     ts_zsc = data['ts'] if ts_zsc is None else ts_zsc
-#     hopf_params = params['hopfParamsAdam'].copy()
-#     hopf_params['verbose'] = verbose
-
-#     model = LinearHopfModel(
-#         C=SC, f_diff=f_diff, sigma=sigma_ini, a=a_ini, **hopf_params
-#     )
-#     model.setup_optimization(optimizer_method='adam', **hopf_params)
-#     Ceff, sigma, a, losses = model.fit(ts_zsc)
-#     FCemp = model.FCemp
-#     COVtauemp = model.COVtauemp
-#     FCsim = model.FCsim
-    
-#     return {
-#         'Ceff': Ceff,
-#         'sigma': sigma,
-#         'a': a,
-#         'losses': losses,
-#         'FCemp': FCemp,
-#         'FCsim': FCsim,
-#         'COVtauemp': COVtauemp
-#     }
 def _compute_empirical_covtau2(ts, COV):
         """Compute empirical COV(tau)"""
         N = COV.shape[0]
@@ -898,28 +561,35 @@ def _compute_empirical_covtau2(ts, COV):
 
 def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
     """Fit model for one subject"""
-    SC = data['SC'][:NPARCELLS, :NPARCELLS]
+    # retrieve parameters and data
     f_diff = data['f_diff'][:NPARCELLS]
     ts_zsc = data['ts'] if ts_zsc is None else ts_zsc
     hopf_params = params['hopfParamsAdam'].copy()
     hopf_params['verbose'] = verbose
     if ts_zsc.ndim == 2:
         ts_zsc = ts_zsc[np.newaxis, :, :]
-    ts = ts_zsc[0, :, 5:-5]
+    ts = ts_zsc[0, :, 5:-5] # remove edges
+
+    # compute initial EC in case of no SC provided (uses FC and COVtau)
     FC = np.corrcoef(ts)
     COV = np.cov(ts)
     COVtau = _compute_empirical_covtau2(ts.T, COV)
-    FC = 0.5*(FC + COVtau) # try out, otherwise remove or try to include COVtau
-    np.fill_diagonal(FC, 0.0)
-    normFC = 0.05*(FC - FC.min()) / (FC.max() - FC.min())
-    np.fill_diagonal(normFC, 0.0)
-    
-    SC = normFC
+    FCCOVtau = 0.5*(FC + COVtau)
+    np.fill_diagonal(FCCOVtau, 0.0)
+    SC_ini = 0.05*(FCCOVtau - FCCOVtau.min()) / (FCCOVtau.max() - FCCOVtau.min()) # normalize
+    np.fill_diagonal(SC_ini, 0.0)
 
-    model = LinearHopfModel(
-        C=SC, f_diff=f_diff, sigma=sigma_ini, a=a_ini, **hopf_params
-    )
+    SC = SC_ini
+
+    # in case SC is provided:
+    # SC = data['SC'][:NPARCELLS, :NPARCELLS]
+
+    # initialize model
+    model = LinearHopfModel(C=SC, f_diff=f_diff, sigma=sigma_ini, a=a_ini, **hopf_params)
+
+    # choose optimizer method and provide fit parameters
     model.setup_optimization(optimizer_method='adam', **hopf_params)
+
     Ceff, sigma, a, losses = model.fit(ts_zsc)
     
     # Get all empirical quantities
@@ -936,7 +606,7 @@ def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
         'Ceff': Ceff,
         'sigma': sigma,
         'a': a,
-        'SC': SC,  # Original structural connectivity
+        'SC': SC,
         'f_diff': f_diff,
         
         # Empirical quantities
@@ -954,5 +624,4 @@ def fit_linhopf(data, ts_zsc, sigma_ini, a_ini, verbose, params, NPARCELLS):
         
         # Loss information
         'losses': losses
-        #'loss_history': model.loss_manager.history
     }

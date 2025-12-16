@@ -14,16 +14,7 @@ import glob
 import re
 import numpy as np
 import pandas as pd
-import src.utils.hdf as hdf
-# from DataLoaders.baseDataLoader import DataLoader
-# import DataLoaders.Parcellations.Schaefer2018 as Schaefer2018
-
-
-# # ==========================================================================
-# # Important config options: filenames
-# # ==========================================================================
-# from DataLoaders.WorkBrainFolder import *
-
+import src.data_loaders.hdf as hdf
 
 # ================================================================================================================
 # ================================================================================================================

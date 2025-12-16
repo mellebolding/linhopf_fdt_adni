@@ -1,17 +1,13 @@
 import os
 import numpy as np
 import src.data_processing.filterps as filterps
-from src.data_loaders.ADNI_A import loadBurden
 import src.data_loaders.ADNI_B as ADNI_B
 
 
-def load_group_data(DL, group_name, DL_type, SC=None):
+def load_group_data(DL, group_name, SC=None):
     """Load all subjects from one group"""
     subject_ids = DL.get_groupSubjects(group_name)
-    if DL_type == 'DL_A': 
-        factor = 1
-    else: 
-        factor = 1
+
     group_data = []
     
     for subject_id in subject_ids:
@@ -19,7 +15,7 @@ def load_group_data(DL, group_name, DL_type, SC=None):
         group_data.append({
             'subject_id': subject_id,
             'group': group_name,
-            'MRI': data[subject_id]['timeseries'].T*factor,
+            'MRI': data[subject_id]['timeseries'].T,
             'SC': data[subject_id]['SC'] if 'SC' in data[subject_id] else SC,
             'f_diff': filterps.calc_H_freq(
                 data[subject_id]['timeseries'].T, 3000, 
@@ -47,12 +43,6 @@ def prepare_group_data(all_data, NPARCELLS):
 def loadProteins(df, DL_type, protein, repo_root,filt=False):
     "protein must be 'Tau' or 'Amyloid'"
     protein = f'{protein}'
-    if DL_type == 'DL_A':
-        df[protein] = [loadBurden(subID, protein, repo_root + '/data/ADNI-A_DATA/', normalize=False) 
-                    if subID != 'nan' else np.nan for subID in df['subject_id']]
-        group_means = df.groupby('group')[protein].agg(lambda x: np.mean(np.stack(x.dropna().tolist()), axis=0))
-        nan_mask = df[protein].isna()
-        df.loc[nan_mask, protein] = df.loc[nan_mask, 'group'].map(group_means)
     if DL_type == 'DL_B1':
         if protein == 'Amyloid':
             protein = 'ABeta'
