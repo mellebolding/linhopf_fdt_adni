@@ -10,7 +10,8 @@ The repo contains 6 main scripts:
 - compute_classifier.py: uses RF+SVM classifier to produce classification results (data from FDT_DATA & abeta+tau from ADNI-B_DATA)
 - compute_classifier_analysis.py: plots the classifier figures of the thesis and saves them in teh RESULT_PLOTS (data from CLASSIFIER_DATA)
 
-Other files included are:
+Other files:
 - hyperparameters.json: model hyperparameters and RSN/parcel maps
 - run_compute_linhopf.sh: bash file to run compute_linhopf.py on computing cluster
 - src: includes helper functions, such as plotting functions (analysis), data loading functions (data_loaders), preprocessing functions (data_processing), and computation functions (functions_frameworks)
+- data: contains data of various stages. ADNI data with fMRI time series, abeta+tau values, and additional database info (ADNI-B_DATA). Data produced by the Hopf model (HOPF_DATA). Data from the FDT calculations (FDT_DATA). Data from the classifier computations (CLASSIFIER_DATA). Result plots (RESULT_PLOTS).
