@@ -8,6 +8,9 @@ INPUTS:
 OUTPUTS:
   - Compressed npz file with fitting results per subject: 
       [subject_id, group, f_diff, SC, EC, fitted sigma, fitted a, fit metrics]
+
+WARNING: This script can take a long time to run depending on the number of subjects and parcels; 
+for 400 parcels and ~178 subjects, several days on the cluster.
 """
 
 import os
