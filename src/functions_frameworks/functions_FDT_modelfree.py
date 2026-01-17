@@ -130,10 +130,12 @@ def _computeDistanceFromEquilibrium(I):
     I = np.asarray(I)
 
     if I.ndim == 1:
+        print('one')
         I = np.abs(I[:, None] - I[None, :])
 
     diag_mask = np.identity(I.shape[0], dtype=bool)
-    Imask = np.ma.array(np.ones(I.shape[0])-np.abs(I)<0, mask=diag_mask)
+    #Imask = np.ma.array(np.ones(I.shape[0])-np.abs(I)<0, mask=diag_mask)
+    Imask = np.ma.array(np.ones(I.shape[0])-np.abs(I), mask=diag_mask)
     intI = np.average(Imask, axis=1)
 
     return intI

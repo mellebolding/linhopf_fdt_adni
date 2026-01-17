@@ -60,10 +60,101 @@ df_based = df_based[:-4] # remove last 4 entries with incomplete data
 df_based.reset_index(drop=True, inplace=True)
 
 ### ANALYSIS PLOTS ###
-df = df_based # model-free: df_free; model-based: df_based
+df = df_free # model-free: df_free; model-based: df_based
 measure = 'I_norm2' # 'I_norm2', 'Tau', 'ABeta'
 RSNs = ['Vis','SalVentAttn', 'SomMot', 'DorsAttn', 'Limbic', 'Cont', 'Def']
 
+print(df.columns)
+print(df.head())
+print(df['subject_id'][2], df['subject_id'][3], df['subject_id'][4], df['subject_id'][5])
+
+
+
+def plot_I_norm2_by_location(df, measure='I_norm2', save_path=None):
+    """
+    Creates a box plot of subject-averaged I_norm2 values grouped by recording location.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing 'subject_id' and the measure column (e.g., 'I_norm2').
+    measure : str
+        Column name containing the metric values (default: 'I_norm2').
+    save_path : str, optional
+        Path to save the figure. If None, the plot is shown but not saved.
+    
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with subject averages and their locations.
+    """
+    import matplotlib.pyplot as plt
+    
+    # Extract location from subject_id (3 digits after 'S_')
+    def extract_location(subject_id):
+        parts = subject_id.split('_S_')
+        if len(parts) == 2:
+            return parts[0][:3]  # Get 3 digits after S_
+        return None
+    
+    # Calculate subject average of I_norm2 for each subject
+    subject_averages = []
+    for idx, row in df.iterrows():
+        subject_id = row['subject_id']
+        location = extract_location(subject_id)
+        # Average over the list of I_norm2 values for this subject
+        i_norm2_values = row[measure]
+        if isinstance(i_norm2_values, (list, np.ndarray)):
+            avg_value = np.mean(i_norm2_values)
+        else:
+            avg_value = i_norm2_values
+        subject_averages.append({
+            'subject_id': subject_id,
+            'location': location,
+            f'{measure}_avg': avg_value
+        })
+    
+    avg_df = pd.DataFrame(subject_averages)
+    
+    # Sort locations by number of subjects (descending) for better visualization
+    location_counts = avg_df['location'].value_counts()
+    sorted_locations = location_counts.index.tolist()
+    
+    # Create box plot
+    fig, ax = plt.subplots(figsize=(14, 6))
+    
+    # Prepare data for box plot
+    box_data = [avg_df[avg_df['location'] == loc][f'{measure}_avg'].values 
+                for loc in sorted_locations]
+    
+    bp = ax.boxplot(box_data, labels=sorted_locations, patch_artist=True)
+    
+    # Style the box plot
+    for patch in bp['boxes']:
+        patch.set_facecolor('lightblue')
+        patch.set_alpha(0.7)
+    
+    ax.set_xlabel('Recording Location (Site ID)', fontsize=12)
+    ax.set_ylabel(f'Subject Average {measure}', fontsize=12)
+    ax.tick_params(axis='x', rotation=45)
+    
+    # Add count annotations
+    for i, loc in enumerate(sorted_locations):
+        count = location_counts[loc]
+        ax.annotate(f'n={count}', xy=(i+1, ax.get_ylim()[1]), 
+                    ha='center', va='bottom', fontsize=8, color='gray')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Figure saved to {save_path}")
+    
+    plt.show()
+    
+    return avg_df
+
+avg_df = plot_I_norm2_by_location(df, measure='I_norm2')
 ### rearrange data for subject average RSN plots (needed for Fig. A6.2 and Fig. 4.2.4)
 rsn_sub_df = aggregate_all_rsns_for_plotting(
     df=df,
@@ -76,10 +167,10 @@ subject_comparison(df, measure='ABeta', model_type='modelbased', NPARCELLS=NPARC
 subject_comparison(df, measure='Tau', model_type='modelbased', NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, save_path_plot=save_path_plot, rsn_name='All')
 
 ### Fig. 2.2.1: Empirical vs Simulated FC/COVtau comparisons
-emp_sim_triangles(DL_type=DL_type, NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, joint_normalization=True, n_conditions=4)
+#emp_sim_triangles(DL_type=DL_type, NPARCELLS=NPARCELLS, fit_sigma=fit_sigma, fit_a=fit_a, joint_normalization=True, n_conditions=4)
 
 ### Fig. 2.2.2: Ceff matrices per group
-plot_ceff_matrices(df, groups=['HC', 'MCI(AB+)', 'AD'], n_parcels=NPARCELLS)
+#plot_ceff_matrices(df, groups=['HC', 'MCI(AB+)', 'AD'], n_parcels=NPARCELLS)
 
 ### Fig. 4.1.1: Violin plots of subject and parcel comparisons
 results = plot_violin_groups_with_significance(
