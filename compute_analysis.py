@@ -71,48 +71,65 @@ print(df['subject_id'][2], df['subject_id'][3], df['subject_id'][4], df['subject
 # Create dataframe with subject averages for both model types
 def create_subject_avg_df(df_based, df_free, measure='I_norm2'):
     """
-    Create a dataframe with subject-level averages for both model types.
+    Create a dataframe with subject-level averages and parcel values for both model types.
     
     Returns
     -------
     pd.DataFrame
-        Dataframe with columns: subject_id, group, I_norm2_modelbased, I_norm2_modelfree
+        Dataframe with columns: subject_id, group, {measure}_modelbased, {measure}_modelfree,
+        {measure}_parcels_modelbased, {measure}_parcels_modelfree
     """
-    # Create dict for model-based averages
-    based_avgs = {}
+    # Create dict for model-based averages and parcel values
+    based_data = {}
     for idx, row in df_based.iterrows():
         measure_values = row[measure]
-        subject_avg = np.mean(measure_values) if isinstance(measure_values, (list, np.ndarray)) else measure_values
-        based_avgs[row['subject_id']] = {
+        if isinstance(measure_values, (list, np.ndarray)):
+            subject_avg = np.mean(measure_values)
+            parcel_values = np.array(measure_values) if isinstance(measure_values, list) else measure_values
+        else:
+            subject_avg = measure_values
+            parcel_values = np.array([measure_values])
+        based_data[row['subject_id']] = {
             'group': row['group'],
-            f'{measure}_modelbased': subject_avg
+            f'{measure}_modelbased': subject_avg,
+            f'{measure}_parcels_modelbased': parcel_values
         }
     
-    # Create dict for model-free averages
-    free_avgs = {}
+    # Create dict for model-free averages and parcel values
+    free_data = {}
     for idx, row in df_free.iterrows():
         measure_values = row[measure]
-        subject_avg = np.mean(measure_values) if isinstance(measure_values, (list, np.ndarray)) else measure_values
-        free_avgs[row['subject_id']] = {
+        if isinstance(measure_values, (list, np.ndarray)):
+            subject_avg = np.mean(measure_values)
+            parcel_values = np.array(measure_values) if isinstance(measure_values, list) else measure_values
+        else:
+            subject_avg = measure_values
+            parcel_values = np.array([measure_values])
+        free_data[row['subject_id']] = {
             'group': row['group'],
-            f'{measure}_modelfree': subject_avg
+            f'{measure}_modelfree': subject_avg,
+            f'{measure}_parcels_modelfree': parcel_values
         }
     
     # Merge into single dataframe
-    all_subjects = set(based_avgs.keys()) | set(free_avgs.keys())
+    all_subjects = set(based_data.keys()) | set(free_data.keys())
     rows = []
     for subject_id in all_subjects:
         row = {'subject_id': subject_id}
-        if subject_id in based_avgs:
-            row['group'] = based_avgs[subject_id]['group']
-            row[f'{measure}_modelbased'] = based_avgs[subject_id][f'{measure}_modelbased']
+        if subject_id in based_data:
+            row['group'] = based_data[subject_id]['group']
+            row[f'{measure}_modelbased'] = based_data[subject_id][f'{measure}_modelbased']
+            row[f'{measure}_parcels_modelbased'] = based_data[subject_id][f'{measure}_parcels_modelbased']
         else:
             row[f'{measure}_modelbased'] = np.nan
-        if subject_id in free_avgs:
-            row['group'] = free_avgs[subject_id]['group']
-            row[f'{measure}_modelfree'] = free_avgs[subject_id][f'{measure}_modelfree']
+            row[f'{measure}_parcels_modelbased'] = np.array([])
+        if subject_id in free_data:
+            row['group'] = free_data[subject_id]['group']
+            row[f'{measure}_modelfree'] = free_data[subject_id][f'{measure}_modelfree']
+            row[f'{measure}_parcels_modelfree'] = free_data[subject_id][f'{measure}_parcels_modelfree']
         else:
             row[f'{measure}_modelfree'] = np.nan
+            row[f'{measure}_parcels_modelfree'] = np.array([])
     
         rows.append(row)
     
