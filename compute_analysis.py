@@ -68,6 +68,69 @@ print(df.columns)
 print(df.head())
 print(df['subject_id'][2], df['subject_id'][3], df['subject_id'][4], df['subject_id'][5])
 
+# Create dataframe with subject averages for both model types
+def create_subject_avg_df(df_based, df_free, measure='I_norm2'):
+    """
+    Create a dataframe with subject-level averages for both model types.
+    
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe with columns: subject_id, group, I_norm2_modelbased, I_norm2_modelfree
+    """
+    # Create dict for model-based averages
+    based_avgs = {}
+    for idx, row in df_based.iterrows():
+        measure_values = row[measure]
+        subject_avg = np.mean(measure_values) if isinstance(measure_values, (list, np.ndarray)) else measure_values
+        based_avgs[row['subject_id']] = {
+            'group': row['group'],
+            f'{measure}_modelbased': subject_avg
+        }
+    
+    # Create dict for model-free averages
+    free_avgs = {}
+    for idx, row in df_free.iterrows():
+        measure_values = row[measure]
+        subject_avg = np.mean(measure_values) if isinstance(measure_values, (list, np.ndarray)) else measure_values
+        free_avgs[row['subject_id']] = {
+            'group': row['group'],
+            f'{measure}_modelfree': subject_avg
+        }
+    
+    # Merge into single dataframe
+    all_subjects = set(based_avgs.keys()) | set(free_avgs.keys())
+    rows = []
+    for subject_id in all_subjects:
+        row = {'subject_id': subject_id}
+        if subject_id in based_avgs:
+            row['group'] = based_avgs[subject_id]['group']
+            row[f'{measure}_modelbased'] = based_avgs[subject_id][f'{measure}_modelbased']
+        else:
+            row[f'{measure}_modelbased'] = np.nan
+        if subject_id in free_avgs:
+            row['group'] = free_avgs[subject_id]['group']
+            row[f'{measure}_modelfree'] = free_avgs[subject_id][f'{measure}_modelfree']
+        else:
+            row[f'{measure}_modelfree'] = np.nan
+    
+        rows.append(row)
+    
+    return pd.DataFrame(rows)
+
+# Create combined dataframe
+df_combined = create_subject_avg_df(df_based, df_free, measure='I_norm2')
+print("\n--- Combined Subject Averages DataFrame ---")
+print(f"Shape: {df_combined.shape}")
+print(df_combined.head(10))
+print(f"\nGroup counts:")
+print(df_combined['group'].value_counts())
+
+# Save to CSV for easy sharing
+csv_path = os.path.join(save_path, 'I_norm2_subject_averages.csv')
+df_combined.to_csv(csv_path, index=False)
+print(f"\nSaved to: {csv_path}")
+
 
 
 def plot_I_norm2_by_location(df, measure='I_norm2', save_path=None):
