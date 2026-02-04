@@ -1,5 +1,10 @@
 """
-Compare harmonized model-based FDT data (FDT_data_mb_har.csv) with original model-based data (FDT_data.csv).
+Compare all 4 FDT conditions:
+1. Model-based original
+2. Model-based harmonized
+3. Model-free original
+4. Model-free harmonized
+
 Recreates plot 4.1.1: Violin plots of subject averages across groups with significance testing.
 Also includes RSN-level analysis plots.
 """
@@ -43,48 +48,60 @@ groups_to_keep = ["HC", "MCI(AB+)", "AD"]
 # -------------------------
 print("Loading data...")
 
-# Load harmonized model-based data
-df_har = pd.read_csv(os.path.join(save_path, 'FDT_data_mb_har.csv'))
-print(f"Harmonized data shape: {df_har.shape}")
-print(f"Harmonized columns: {df_har.columns[:10].tolist()}...")
-
-# Load original model-based data
+# Load original data (contains both model-based and model-free)
 df_orig = pd.read_csv(os.path.join(save_path, 'FDT_data.csv'))
 print(f"Original data shape: {df_orig.shape}")
-print(f"Original columns: {df_orig.columns.tolist()}")
+
+# Load harmonized model-based data
+df_mb_har = pd.read_csv(os.path.join(save_path, 'FDT_data_mb_har.csv'))
+print(f"Harmonized model-based data shape: {df_mb_har.shape}")
+
+# Load harmonized model-free data
+df_mf_har = pd.read_csv(os.path.join(save_path, 'FDT_data_mf_har.csv'))
+print(f"Harmonized model-free data shape: {df_mf_har.shape}")
 
 # -------------------------
-# Process Harmonized Data
+# Process All 4 Conditions
 # -------------------------
-print("\nProcessing harmonized data...")
+print("\nProcessing data for all 4 conditions...")
 
-# Parcel columns are 0-399
 parcel_cols = [str(i) for i in range(400)]
 
-# Calculate subject averages for harmonized data
-df_har_processed = df_har[['id', 'group', 'site']].copy()
-df_har_processed['I_norm2_avg'] = df_har[parcel_cols].mean(axis=1)
-df_har_processed = df_har_processed[df_har_processed['group'].isin(groups_to_keep)].copy()
-df_har_processed = df_har_processed.rename(columns={'id': 'subject_id'})
+# 1. Model-based original
+df_mb_orig = df_orig[['subject_id', 'group', 'I_norm2_modelbased']].copy()
+df_mb_orig = df_mb_orig.rename(columns={'I_norm2_modelbased': 'I_norm2_avg'})
+df_mb_orig = df_mb_orig[df_mb_orig['group'].isin(groups_to_keep)].copy()
+df_mb_orig = df_mb_orig.dropna(subset=['I_norm2_avg'])
+df_mb_orig['condition'] = 'Model-based Original'
+print(f"Model-based original: {len(df_mb_orig)} subjects")
 
-print(f"Harmonized data after processing: {df_har_processed.shape}")
-print(df_har_processed.head())
-print(f"\nHarmonized group counts:\n{df_har_processed['group'].value_counts()}")
+# 2. Model-based harmonized
+df_mb_har_processed = df_mb_har[['id', 'group', 'site']].copy()
+df_mb_har_processed['I_norm2_avg'] = df_mb_har[parcel_cols].mean(axis=1)
+df_mb_har_processed = df_mb_har_processed[df_mb_har_processed['group'].isin(groups_to_keep)].copy()
+df_mb_har_processed = df_mb_har_processed.rename(columns={'id': 'subject_id'})
+df_mb_har_processed['condition'] = 'Model-based Harmonized'
+print(f"Model-based harmonized: {len(df_mb_har_processed)} subjects")
+
+# 3. Model-free original
+df_mf_orig = df_orig[['subject_id', 'group', 'I_norm2_modelfree']].copy()
+df_mf_orig = df_mf_orig.rename(columns={'I_norm2_modelfree': 'I_norm2_avg'})
+df_mf_orig = df_mf_orig[df_mf_orig['group'].isin(groups_to_keep)].copy()
+df_mf_orig = df_mf_orig.dropna(subset=['I_norm2_avg'])
+df_mf_orig['condition'] = 'Model-free Original'
+print(f"Model-free original: {len(df_mf_orig)} subjects")
+
+# 4. Model-free harmonized
+df_mf_har_processed = df_mf_har[['id', 'group', 'site']].copy()
+df_mf_har_processed['I_norm2_avg'] = df_mf_har[parcel_cols].mean(axis=1)
+df_mf_har_processed = df_mf_har_processed[df_mf_har_processed['group'].isin(groups_to_keep)].copy()
+df_mf_har_processed = df_mf_har_processed.rename(columns={'id': 'subject_id'})
+df_mf_har_processed['condition'] = 'Model-free Harmonized'
+print(f"Model-free harmonized: {len(df_mf_har_processed)} subjects")
 
 # -------------------------
-# Process Original Data
+# Plotting Functions
 # -------------------------
-print("\nProcessing original data...")
-
-df_orig_processed = df_orig[['subject_id', 'group', 'I_norm2_modelbased']].copy()
-df_orig_processed = df_orig_processed.rename(columns={'I_norm2_modelbased': 'I_norm2_avg'})
-df_orig_processed = df_orig_processed[df_orig_processed['group'].isin(groups_to_keep)].copy()
-df_orig_processed = df_orig_processed.dropna(subset=['I_norm2_avg'])
-
-print(f"Original data after processing: {df_orig_processed.shape}")
-print(df_orig_processed.head())
-print(f"\nOriginal group counts:\n{df_orig_processed['group'].value_counts()}")
-
 
 def plot_violin_with_significance(df, title, filename, palette, comparisons, groups_order=None):
     """
@@ -96,50 +113,32 @@ def plot_violin_with_significance(df, title, filename, palette, comparisons, gro
     df['Group'] = df['Group'].astype(str)
     df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
     df = df.dropna()
-    
+
     if groups_order is None:
         groups_order = ['HC', 'MCI(AB+)', 'AD']
-    
-    # Filter to only groups present in data
+
     groups_order = [g for g in groups_order if g in df['Group'].unique()]
-    
+
     group_counts = df.groupby('Group')['Value'].count()
     new_xlabels = [f"{group}\n(N={group_counts[group]})" for group in groups_order]
-    
+
     fig, ax = plt.subplots(figsize=(10, 8))
     sns.set_context('notebook', font_scale=1.0)
-    
+
     sns.violinplot(
-        data=df,
-        x='Group',
-        y='Value',
-        hue='Group',
-        order=groups_order,
-        hue_order=groups_order,
-        palette=palette,
-        inner='quartile',
-        linewidth=0.8,
-        ax=ax,
-        legend=False
+        data=df, x='Group', y='Value', hue='Group',
+        order=groups_order, hue_order=groups_order,
+        palette=palette, inner='quartile', linewidth=0.8,
+        ax=ax, legend=False
     )
-    
+
     sns.stripplot(
-        data=df,
-        x='Group',
-        y='Value',
-        hue='Group',
-        order=groups_order,
-        edgecolor='black',
-        s=3,
-        alpha=0.6,
-        jitter=0.2,
-        linewidth=0.7,
-        palette=palette,
-        dodge=False,
-        ax=ax,
-        legend=False
+        data=df, x='Group', y='Value', hue='Group',
+        order=groups_order, edgecolor='black', s=3, alpha=0.6,
+        jitter=0.2, linewidth=0.7, palette=palette, dodge=False,
+        ax=ax, legend=False
     )
-    
+
     ax.set_xticklabels(new_xlabels, fontsize=14)
     ax.tick_params(axis='y', length=0)
     ax.tick_params(axis='x', length=0)
@@ -147,56 +146,47 @@ def plot_violin_with_significance(df, title, filename, palette, comparisons, gro
     ax.spines['top'].set_visible(False)
     ax.spines['left'].set_linewidth(0.8)
     ax.spines['bottom'].set_linewidth(0.8)
-    
+
     ax.set_title(title, fontsize=15, pad=15)
     ax.set_ylabel('Integral violation [subject average]', fontsize=15)
     ax.set_xlabel('', fontsize=14)
-    
-    # Add significance bars
+
     y_max = df['Value'].max()
     y_min = df['Value'].min()
     y_range = y_max - y_min
     base_height = y_max + 0.08 * y_range
-    
+
     print(f"\n{title} - Statistical tests:")
     for i, (g1, g2) in enumerate(comparisons):
         if g1 not in groups_order or g2 not in groups_order:
             continue
-            
+
         vals1 = df[df['Group'] == g1]['Value'].values
         vals2 = df[df['Group'] == g2]['Value'].values
-        
+
         if len(vals1) == 0 or len(vals2) == 0:
             continue
-        
+
         stat, p_val = ranksums(vals1, vals2)
         u_stat, _ = mannwhitneyu(vals1, vals2, alternative='two-sided')
-        
+
         n1, n2 = len(vals1), len(vals2)
         effect_size = 1 - (2 * u_stat) / (n1 * n2)
-        
-        sig = '***' if p_val < 0.001 else \
-              '**' if p_val < 0.01 else \
-              '*' if p_val < 0.05 else ''
-        
+
+        sig = '***' if p_val < 0.001 else '**' if p_val < 0.01 else '*' if p_val < 0.05 else ''
+
         x1 = groups_order.index(g1)
         x2 = groups_order.index(g2)
-        
+
         y = base_height + i * 0.08 * y_range
         print(f"  {g1} vs {g2}: p={p_val:.5f}, effect_size={effect_size:.3f} (n1={n1}, n2={n2})")
-        
+
         if sig != '':
-            ax.plot([x1, x1, x2, x2],
-                    [y, y + 0.02*y_range, y + 0.02*y_range, y],
+            ax.plot([x1, x1, x2, x2], [y, y + 0.02*y_range, y + 0.02*y_range, y],
                     lw=1.2, color='black')
-        
-        ax.text((x1 + x2) / 2,
-                y + 0.025*y_range,
-                sig,
-                ha='center',
-                va='bottom',
-                fontsize=14)
-    
+
+        ax.text((x1 + x2) / 2, y + 0.025*y_range, sig, ha='center', va='bottom', fontsize=14)
+
     plt.tight_layout()
     plt.savefig(os.path.join(save_path_plot, filename), dpi=300, bbox_inches='tight')
     plt.show()
@@ -204,64 +194,59 @@ def plot_violin_with_significance(df, title, filename, palette, comparisons, gro
     print(f"Saved: {filename}")
 
 
-def plot_side_by_side_comparison(df_orig, df_har, palette, comparisons):
+def plot_four_conditions_comparison(df_mb_orig, df_mb_har, df_mf_orig, df_mf_har, palette, comparisons):
     """
-    Creates a side-by-side comparison of original vs harmonized data.
+    Creates a 2x2 comparison of all 4 conditions.
     """
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8), sharey=True)
+    fig, axes = plt.subplots(2, 2, figsize=(16, 14), sharey=True)
     sns.set_context('notebook', font_scale=1.0)
-    
+
     groups_order = ['HC', 'MCI(AB+)', 'AD']
-    
+
     datasets = [
-        (df_orig, 'Original Model-Based', axes[0]),
-        (df_har, 'Harmonized Model-Based', axes[1])
+        (df_mb_orig, 'Model-based Original', axes[0, 0]),
+        (df_mb_har, 'Model-based Harmonized', axes[0, 1]),
+        (df_mf_orig, 'Model-free Original', axes[1, 0]),
+        (df_mf_har, 'Model-free Harmonized', axes[1, 1])
     ]
-    
+
+    # Calculate global y-limits across all 4 conditions for consistent scaling
+    all_values = []
+    for df, _, _ in datasets:
+        vals = pd.to_numeric(df['I_norm2_avg'], errors='coerce').dropna()
+        all_values.extend(vals.tolist())
+    global_min = min(all_values)
+    global_max = max(all_values)
+    global_range = global_max - global_min if global_max != global_min else 1
+    base_height = global_max + 0.08 * global_range
+    y_top = base_height + len(comparisons) * 0.08 * global_range + 0.05 * global_range
+
     for df, title, ax in datasets:
         df = df[['group', 'I_norm2_avg']].copy()
         df.columns = ['Group', 'Value']
         df['Group'] = df['Group'].astype(str)
         df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
         df = df.dropna()
-        
-        # Filter to only groups present in data
+
         available_groups = [g for g in groups_order if g in df['Group'].unique()]
-        
+
         group_counts = df.groupby('Group')['Value'].count()
         new_xlabels = [f"{group}\n(N={group_counts.get(group, 0)})" for group in available_groups]
-        
+
         sns.violinplot(
-            data=df,
-            x='Group',
-            y='Value',
-            hue='Group',
-            order=available_groups,
-            hue_order=available_groups,
-            palette=palette,
-            inner='quartile',
-            linewidth=0.8,
-            ax=ax,
-            legend=False
+            data=df, x='Group', y='Value', hue='Group',
+            order=available_groups, hue_order=available_groups,
+            palette=palette, inner='quartile', linewidth=0.8,
+            ax=ax, legend=False
         )
-        
+
         sns.stripplot(
-            data=df,
-            x='Group',
-            y='Value',
-            hue='Group',
-            order=available_groups,
-            edgecolor='black',
-            s=3,
-            alpha=0.6,
-            jitter=0.2,
-            linewidth=0.7,
-            palette=palette,
-            dodge=False,
-            ax=ax,
-            legend=False
+            data=df, x='Group', y='Value', hue='Group',
+            order=available_groups, edgecolor='black', s=3, alpha=0.6,
+            jitter=0.2, linewidth=0.7, palette=palette, dodge=False,
+            ax=ax, legend=False
         )
-        
+
         ax.set_xticklabels(new_xlabels, fontsize=12)
         ax.tick_params(axis='y', length=0)
         ax.tick_params(axis='x', length=0)
@@ -269,54 +254,45 @@ def plot_side_by_side_comparison(df_orig, df_har, palette, comparisons):
         ax.spines['top'].set_visible(False)
         ax.spines['left'].set_linewidth(0.8)
         ax.spines['bottom'].set_linewidth(0.8)
-        
+
         ax.set_title(title, fontsize=14, pad=10)
         ax.set_xlabel('', fontsize=12)
-        
-        # Add significance bars
-        y_max = df['Value'].max()
-        y_min = df['Value'].min()
-        y_range = y_max - y_min if y_max != y_min else 1
-        base_height = y_max + 0.08 * y_range
-        
+
+        # Use global base_height and range for consistent bar placement
         for i, (g1, g2) in enumerate(comparisons):
             if g1 not in available_groups or g2 not in available_groups:
                 continue
-                
+
             vals1 = df[df['Group'] == g1]['Value'].values
             vals2 = df[df['Group'] == g2]['Value'].values
-            
+
             if len(vals1) == 0 or len(vals2) == 0:
                 continue
-            
+
             _, p_val = ranksums(vals1, vals2)
-            
-            sig = '***' if p_val < 0.001 else \
-                  '**' if p_val < 0.01 else \
-                  '*' if p_val < 0.05 else ''
-            
+
+            sig = '***' if p_val < 0.001 else '**' if p_val < 0.01 else '*' if p_val < 0.05 else ''
+
             x1 = available_groups.index(g1)
             x2 = available_groups.index(g2)
-            
-            y = base_height + i * 0.08 * y_range
-            
+
+            y = base_height + i * 0.08 * global_range
+
             if sig != '':
-                ax.plot([x1, x1, x2, x2],
-                        [y, y + 0.02*y_range, y + 0.02*y_range, y],
+                ax.plot([x1, x1, x2, x2], [y, y + 0.02*global_range, y + 0.02*global_range, y],
                         lw=1.2, color='black')
-            
-            ax.text((x1 + x2) / 2,
-                    y + 0.025*y_range,
-                    sig,
-                    ha='center',
-                    va='bottom',
-                    fontsize=12)
-    
-    axes[0].set_ylabel('Integral violation [subject average]', fontsize=14)
-    axes[1].set_ylabel('')
-    
+
+            ax.text((x1 + x2) / 2, y + 0.025*global_range, sig, ha='center', va='bottom', fontsize=12)
+
+        ax.set_ylim(bottom=global_min - 0.05 * global_range, top=y_top)
+
+    axes[0, 0].set_ylabel('Integral violation [subject average]', fontsize=14)
+    axes[1, 0].set_ylabel('Integral violation [subject average]', fontsize=14)
+    axes[0, 1].set_ylabel('')
+    axes[1, 1].set_ylabel('')
+
     plt.tight_layout()
-    filename = 'violin_comparison_original_vs_harmonized.png'
+    filename = 'violin_comparison_all_4_conditions.png'
     plt.savefig(os.path.join(save_path_plot, filename), dpi=300, bbox_inches='tight')
     plt.show()
     plt.close(fig)
@@ -330,30 +306,38 @@ print("\n" + "="*60)
 print("GENERATING PLOTS")
 print("="*60)
 
-# Plot 1: Original model-based data
+# Plot 1: Model-based original
 plot_violin_with_significance(
-    df_orig_processed,
-    title='Original Model-Based',
-    filename='violin_original_modelbased.png',
-    palette=palette,
-    comparisons=comparisons
+    df_mb_orig, title='Model-based Original',
+    filename='violin_modelbased_original.png',
+    palette=palette, comparisons=comparisons
 )
 
-# Plot 2: Harmonized model-based data
+# Plot 2: Model-based harmonized
 plot_violin_with_significance(
-    df_har_processed,
-    title='Harmonized Model-Based',
-    filename='violin_harmonized_modelbased.png',
-    palette=palette,
-    comparisons=comparisons
+    df_mb_har_processed, title='Model-based Harmonized',
+    filename='violin_modelbased_harmonized.png',
+    palette=palette, comparisons=comparisons
 )
 
-# Plot 3: Side-by-side comparison
-plot_side_by_side_comparison(
-    df_orig_processed,
-    df_har_processed,
-    palette=palette,
-    comparisons=comparisons
+# Plot 3: Model-free original
+plot_violin_with_significance(
+    df_mf_orig, title='Model-free Original',
+    filename='violin_modelfree_original.png',
+    palette=palette, comparisons=comparisons
+)
+
+# Plot 4: Model-free harmonized
+plot_violin_with_significance(
+    df_mf_har_processed, title='Model-free Harmonized',
+    filename='violin_modelfree_harmonized.png',
+    palette=palette, comparisons=comparisons
+)
+
+# Plot 5: All 4 conditions side-by-side (2x2)
+plot_four_conditions_comparison(
+    df_mb_orig, df_mb_har_processed, df_mf_orig, df_mf_har_processed,
+    palette=palette, comparisons=comparisons
 )
 
 # -------------------------
@@ -363,83 +347,19 @@ print("\n" + "="*60)
 print("SUMMARY STATISTICS")
 print("="*60)
 
-print("\nOriginal Model-Based Data:")
-for group in groups_to_keep:
-    vals = df_orig_processed[df_orig_processed['group'] == group]['I_norm2_avg']
-    if len(vals) > 0:
-        print(f"  {group}: mean={vals.mean():.4f}, std={vals.std():.4f}, n={len(vals)}")
+all_conditions = [
+    ('Model-based Original', df_mb_orig),
+    ('Model-based Harmonized', df_mb_har_processed),
+    ('Model-free Original', df_mf_orig),
+    ('Model-free Harmonized', df_mf_har_processed)
+]
 
-print("\nHarmonized Model-Based Data:")
-for group in groups_to_keep:
-    vals = df_har_processed[df_har_processed['group'] == group]['I_norm2_avg']
-    if len(vals) > 0:
-        print(f"  {group}: mean={vals.mean():.4f}, std={vals.std():.4f}, n={len(vals)}")
-
-# -------------------------
-# Compare distributions
-# -------------------------
-print("\n" + "="*60)
-print("DISTRIBUTION COMPARISON (Original vs Harmonized)")
-print("="*60)
-
-# Merge datasets on subject_id
-df_merged = df_orig_processed.merge(
-    df_har_processed[['subject_id', 'I_norm2_avg']],
-    on='subject_id',
-    suffixes=('_orig', '_har'),
-    how='inner'
-)
-
-if len(df_merged) > 0:
-    print(f"\nMatched subjects: {len(df_merged)}")
-    
-    # Correlation between original and harmonized
-    corr = np.corrcoef(df_merged['I_norm2_avg_orig'], df_merged['I_norm2_avg_har'])[0, 1]
-    print(f"Correlation (orig vs har): r = {corr:.4f}")
-    
-    # Mean difference
-    mean_diff = (df_merged['I_norm2_avg_orig'] - df_merged['I_norm2_avg_har']).mean()
-    std_diff = (df_merged['I_norm2_avg_orig'] - df_merged['I_norm2_avg_har']).std()
-    print(f"Mean difference (orig - har): {mean_diff:.4f} ± {std_diff:.4f}")
-    
-    # Create scatter plot of original vs harmonized
-    fig, ax = plt.subplots(figsize=(8, 8))
-    
+for cond_name, df in all_conditions:
+    print(f"\n{cond_name}:")
     for group in groups_to_keep:
-        group_data = df_merged[df_merged['group'] == group]
-        ax.scatter(
-            group_data['I_norm2_avg_orig'],
-            group_data['I_norm2_avg_har'],
-            c=palette.get(group, 'gray'),
-            label=f"{group} (n={len(group_data)})",
-            alpha=0.7,
-            s=50
-        )
-    
-    # Add diagonal line
-    lims = [
-        min(ax.get_xlim()[0], ax.get_ylim()[0]),
-        max(ax.get_xlim()[1], ax.get_ylim()[1])
-    ]
-    ax.plot(lims, lims, 'k--', alpha=0.5, zorder=0, label='Identity line')
-    ax.set_xlim(lims)
-    ax.set_ylim(lims)
-    
-    ax.set_xlabel('Original I_norm2 [subject average]', fontsize=12)
-    ax.set_ylabel('Harmonized I_norm2 [subject average]', fontsize=12)
-    ax.set_title(f'Original vs Harmonized (r = {corr:.3f})', fontsize=14)
-    ax.legend(loc='lower right')
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_path_plot, 'scatter_original_vs_harmonized.png'), dpi=300, bbox_inches='tight')
-    plt.show()
-    plt.close(fig)
-    print("\nSaved: scatter_original_vs_harmonized.png")
-else:
-    print("\nNo matching subjects found between datasets")
-
+        vals = df[df['group'] == group]['I_norm2_avg']
+        if len(vals) > 0:
+            print(f"  {group}: mean={vals.mean():.4f}, std={vals.std():.4f}, n={len(vals)}")
 
 # -------------------------
 # RSN Analysis Functions
@@ -448,16 +368,16 @@ def get_parcel_rsn_mapping(json_data_path, nparcels=400):
     """Load parcel to RSN mapping from hyperparams.json"""
     with open(json_data_path, 'r') as f:
         json_data = json.load(f)
-    
+
     network_names = 'Networks_400' if nparcels == 400 else 'Networks'
-    
+
     parcel_idx_to_rsn = {}
     for rsn_name, indices in json_data[network_names].items():
         for idx in indices:
-            idx0 = idx - 1  # convert to 0-based index
+            idx0 = idx - 1
             if 0 <= idx0 < nparcels:
                 parcel_idx_to_rsn[idx0] = rsn_name
-    
+
     parcel_rsn_list = [parcel_idx_to_rsn.get(i, 'Unassigned') for i in range(nparcels)]
     return parcel_rsn_list
 
@@ -465,115 +385,65 @@ def get_parcel_rsn_mapping(json_data_path, nparcels=400):
 def aggregate_rsn_data(df, parcel_cols, parcel_rsn_map, rsn_names_list, groups_to_keep):
     """
     Aggregate parcel data by RSN for each subject.
-    Returns a long-format DataFrame with columns: subject_id, Group, RSN, Value
     """
     all_plot_data = []
-    
+
     for rsn_name in rsn_names_list:
-        # Get RSN-specific parcel indices
         rsn_indices = [i for i, rsn in enumerate(parcel_rsn_map) if rsn == rsn_name]
-        
+
         if not rsn_indices:
             print(f"Warning: No parcels found for RSN: {rsn_name}. Skipping.")
             continue
-        
+
         rsn_parcel_cols = [parcel_cols[i] for i in rsn_indices]
-        
+
         for idx, row in df.iterrows():
             if row['group'] not in groups_to_keep:
                 continue
-            
-            # Get RSN-specific parcel values and compute mean
+
             rsn_values = row[rsn_parcel_cols].values.astype(float)
             mean_value = np.nanmean(rsn_values)
-            
+
             all_plot_data.append({
                 'subject_id': row.get('subject_id', row.get('id')),
                 'Group': row['group'],
                 'RSN': rsn_name,
                 'Value': mean_value
             })
-    
+
     return pd.DataFrame(all_plot_data)
 
 
-def permutation_test(group1, group2, n_permutations=10000):
-    """Perform a permutation test to compare two groups."""
-    group1 = np.array(group1)
-    group2 = np.array(group2)
-    
-    observed_diff = np.mean(group1) - np.mean(group2)
-    combined = np.concatenate([group1, group2])
-    n1 = len(group1)
-    
-    perm_diffs = []
-    for _ in range(n_permutations):
-        np.random.shuffle(combined)
-        perm_group1 = combined[:n1]
-        perm_group2 = combined[n1:]
-        perm_diffs.append(np.mean(perm_group1) - np.mean(perm_group2))
-    
-    perm_diffs = np.array(perm_diffs)
-    p_value = np.mean(np.abs(perm_diffs) >= np.abs(observed_diff))
-    
-    return p_value
-
-
 def plot_rsn_split_violin(plot_df, parcel_rsn_map, rsn_order, groups_order, title, filename,
-                          palette=None, test_type='ranksum', n_permutations=10000):
+                          palette=None, test_type='ranksum'):
     """
     Generates a split violin plot comparison across RSNs.
     """
     if len(groups_order) != 2:
         raise ValueError("Split violin plot requires exactly two groups.")
-    
+
     if palette is None:
-        palette = {
-            groups_order[0]: '#8BC34A',
-            groups_order[1]: '#1ABC9C'
-        }
-    
-    # Count parcels per RSN
-    rsn_parcel_counts = {}
-    for rsn_name in rsn_order:
-        rsn_parcel_counts[rsn_name] = parcel_rsn_map.count(rsn_name)
-    
+        palette = {'HC': '#8BC34A', 'AD': '#1ABC9C'}
+
+    rsn_parcel_counts = {rsn: parcel_rsn_map.count(rsn) for rsn in rsn_order}
     new_xlabels = [f"{rsn}\n(N={rsn_parcel_counts[rsn]})" for rsn in rsn_order]
-    
+
     fig, ax = plt.subplots(figsize=(12, 6))
     sns.set_context('notebook', font_scale=1.0)
-    
+
     sns.violinplot(
-        x='RSN',
-        y='Value',
-        hue='Group',
-        data=plot_df,
-        order=rsn_order,
-        hue_order=groups_order,
-        palette=palette,
-        split=True,
-        inner='quartile',
-        linewidth=0.8,
-        ax=ax
+        x='RSN', y='Value', hue='Group', data=plot_df,
+        order=rsn_order, hue_order=groups_order, palette=palette,
+        split=True, inner='quartile', linewidth=0.8, ax=ax
     )
-    
+
     sns.stripplot(
-        x='RSN',
-        y='Value',
-        hue='Group',
-        data=plot_df,
-        order=rsn_order,
-        hue_order=groups_order,
-        palette=palette,
-        edgecolor='black',
-        linewidth=0.7,
-        s=3,
-        jitter=0.2,
-        alpha=0.6,
-        ax=ax,
-        dodge=True
+        x='RSN', y='Value', hue='Group', data=plot_df,
+        order=rsn_order, hue_order=groups_order, palette=palette,
+        edgecolor='black', linewidth=0.7, s=3, jitter=0.2, alpha=0.6,
+        ax=ax, dodge=True
     )
-    
+
     ax.set_xticklabels(new_xlabels)
     ax.tick_params(axis='y', length=0)
     ax.tick_params(axis='x', length=0)
@@ -581,47 +451,39 @@ def plot_rsn_split_violin(plot_df, parcel_rsn_map, rsn_order, groups_order, titl
     ax.spines['top'].set_visible(False)
     ax.spines['left'].set_linewidth(0.8)
     ax.spines['bottom'].set_linewidth(0.8)
-    
+
     handles, labels_leg = ax.get_legend_handles_labels()
     ax.legend(handles[0:len(groups_order)], labels_leg[0:len(groups_order)],
               loc='upper right', title=None, frameon=True)
-    
+
     ax.set_title(title, fontsize=14, pad=15)
     ax.set_ylabel('Integral violation [subject average]', fontsize=12)
     ax.set_xlabel('', fontsize=12)
-    
-    # Statistical Testing
+
     max_y = plot_df['Value'].max()
     y_range = plot_df['Value'].max() - plot_df['Value'].min()
     y_increment = y_range * 0.16 if y_range > 0 else 1.0
     yposition = max_y + y_increment
-    
-    test_name = "Permutation Test" if test_type == 'permutation' else "Wilcoxon Rank-Sum Test"
-    print(f"\n=== {title}: {test_name} Results for RSNs ===")
-    
+
+    print(f"\n=== {title}: Wilcoxon Rank-Sum Test Results for RSNs ===")
+
     for i, rsn in enumerate(rsn_order):
         rsn_data_subset = plot_df[plot_df['RSN'] == rsn]
         group1_values = rsn_data_subset[rsn_data_subset['Group'] == groups_order[0]]['Value'].values
         group2_values = rsn_data_subset[rsn_data_subset['Group'] == groups_order[1]]['Value'].values
-        
+
         if len(group1_values) > 0 and len(group2_values) > 0:
-            if test_type == 'permutation':
-                p_value = permutation_test(group1_values, group2_values, n_permutations=n_permutations)
-                print(f"  {rsn}: p={p_value:.4f} (n1={len(group1_values)}, n2={len(group2_values)})")
-            else:
-                statistic, p_value = ranksums(group1_values, group2_values)
-                print(f"  {rsn}: p={p_value:.4f} (n1={len(group1_values)}, n2={len(group2_values)})")
-            
-            sig = '***' if p_value < 0.001 else \
-                  '**' if p_value < 0.01 else \
-                  '*' if p_value < 0.05 else ''
-            
+            statistic, p_value = ranksums(group1_values, group2_values)
+            print(f"  {rsn}: p={p_value:.4f} (n1={len(group1_values)}, n2={len(group2_values)})")
+
+            sig = '***' if p_value < 0.001 else '**' if p_value < 0.01 else '*' if p_value < 0.05 else ''
+
             if sig:
-                ax.text(i, yposition, sig, ha='center', va='bottom', color='black', 
+                ax.text(i, yposition, sig, ha='center', va='bottom', color='black',
                         fontsize=12, fontweight='bold')
-    
+
     ax.set_ylim(top=yposition + y_increment * 1.5)
-    
+
     plt.tight_layout()
     plt.savefig(os.path.join(save_path_plot, filename), dpi=300, bbox_inches='tight')
     plt.show()
@@ -629,41 +491,43 @@ def plot_rsn_split_violin(plot_df, parcel_rsn_map, rsn_order, groups_order, titl
     print(f"Saved: {filename}")
 
 
-def plot_rsn_comparison_side_by_side(rsn_df_orig, rsn_df_har, parcel_rsn_map, rsn_order, groups_order, palette=None):
+def plot_rsn_four_conditions(rsn_dfs, parcel_rsn_map, rsn_order, groups_order, palette=None):
     """
-    Side-by-side RSN comparison of original vs harmonized data.
+    2x2 RSN comparison of all 4 conditions.
     """
     if palette is None:
-        palette = {
-            groups_order[0]: '#8BC34A',
-            groups_order[1]: '#1ABC9C'
-        }
-    
+        palette = {'HC': '#8BC34A', 'AD': '#1ABC9C'}
+
     rsn_parcel_counts = {rsn: parcel_rsn_map.count(rsn) for rsn in rsn_order}
     new_xlabels = [f"{rsn}\n(N={rsn_parcel_counts[rsn]})" for rsn in rsn_order]
-    
-    fig, axes = plt.subplots(1, 2, figsize=(20, 6), sharey=True)
-    
-    datasets = [
-        (rsn_df_orig, 'Original Model-Based', axes[0]),
-        (rsn_df_har, 'Harmonized Model-Based', axes[1])
-    ]
-    
-    for plot_df, title, ax in datasets:
+
+    # Calculate global y-limits across all 4 conditions for consistent scaling
+    global_min = min(df['Value'].min() for df in rsn_dfs)
+    global_max = max(df['Value'].max() for df in rsn_dfs)
+    global_range = global_max - global_min
+    yposition = global_max + global_range * 0.12
+    y_top = yposition + global_range * 0.15
+
+    fig, axes = plt.subplots(2, 2, figsize=(20, 12), sharey=True)
+
+    titles = ['Model-based Original', 'Model-based Harmonized',
+              'Model-free Original', 'Model-free Harmonized']
+    axes_flat = [axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]]
+
+    for plot_df, title, ax in zip(rsn_dfs, titles, axes_flat):
         sns.violinplot(
-            x='RSN', y='Value', hue='Group',
-            data=plot_df, order=rsn_order, hue_order=groups_order,
-            palette=palette, split=True, inner='quartile',
-            linewidth=0.8, ax=ax
+            x='RSN', y='Value', hue='Group', data=plot_df,
+            order=rsn_order, hue_order=groups_order, palette=palette,
+            split=True, inner='quartile', linewidth=0.8, ax=ax
         )
-        
+
         sns.stripplot(
-            x='RSN', y='Value', hue='Group',
-            data=plot_df, order=rsn_order, hue_order=groups_order,
-            palette=palette, edgecolor='black', linewidth=0.7,
-            s=3, jitter=0.2, alpha=0.6, ax=ax, dodge=True
+            x='RSN', y='Value', hue='Group', data=plot_df,
+            order=rsn_order, hue_order=groups_order, palette=palette,
+            edgecolor='black', linewidth=0.7, s=3, jitter=0.2, alpha=0.6,
+            ax=ax, dodge=True
         )
-        
+
         ax.set_xticklabels(new_xlabels, fontsize=10)
         ax.tick_params(axis='y', length=0)
         ax.tick_params(axis='x', length=0)
@@ -671,34 +535,32 @@ def plot_rsn_comparison_side_by_side(rsn_df_orig, rsn_df_har, parcel_rsn_map, rs
         ax.spines['top'].set_visible(False)
         ax.set_title(title, fontsize=14, pad=10)
         ax.set_xlabel('', fontsize=12)
-        
+
         handles, labels_leg = ax.get_legend_handles_labels()
         ax.legend(handles[0:len(groups_order)], labels_leg[0:len(groups_order)],
                   loc='upper right', title=None, frameon=True)
-        
-        # Add significance stars
-        max_y = plot_df['Value'].max()
-        y_range = plot_df['Value'].max() - plot_df['Value'].min()
-        yposition = max_y + y_range * 0.16
-        
+
+        # Use global yposition for consistent star placement
         for i, rsn in enumerate(rsn_order):
             rsn_data = plot_df[plot_df['RSN'] == rsn]
             g1_vals = rsn_data[rsn_data['Group'] == groups_order[0]]['Value'].values
             g2_vals = rsn_data[rsn_data['Group'] == groups_order[1]]['Value'].values
-            
+
             if len(g1_vals) > 0 and len(g2_vals) > 0:
                 _, p_val = ranksums(g1_vals, g2_vals)
                 sig = '***' if p_val < 0.001 else '**' if p_val < 0.01 else '*' if p_val < 0.05 else ''
                 if sig:
                     ax.text(i, yposition, sig, ha='center', va='bottom', fontsize=11, fontweight='bold')
-        
-        ax.set_ylim(top=yposition + y_range * 0.2)
-    
-    axes[0].set_ylabel('Integral violation [subject average]', fontsize=14)
-    axes[1].set_ylabel('')
-    
+
+        ax.set_ylim(bottom=global_min - global_range * 0.05, top=y_top)
+
+    axes[0, 0].set_ylabel('Integral violation [subject average]', fontsize=14)
+    axes[1, 0].set_ylabel('Integral violation [subject average]', fontsize=14)
+    axes[0, 1].set_ylabel('')
+    axes[1, 1].set_ylabel('')
+
     plt.tight_layout()
-    filename = 'rsn_violin_comparison_original_vs_harmonized.png'
+    filename = 'rsn_violin_comparison_all_4_conditions.png'
     plt.savefig(os.path.join(save_path_plot, filename), dpi=300, bbox_inches='tight')
     plt.show()
     plt.close(fig)
@@ -717,51 +579,70 @@ json_path = os.path.join(repo_root, 'hyperparams.json')
 parcel_rsn_map = get_parcel_rsn_mapping(json_path, NPARCELLS)
 print(f"Loaded RSN mapping for {NPARCELLS} parcels")
 
-# Parcel columns for harmonized data
-parcel_cols = [str(i) for i in range(400)]
-
-# Aggregate RSN data for harmonized dataset
-rsn_df_har = aggregate_rsn_data(
-    df_har, parcel_cols, parcel_rsn_map, RSNs, groups_to_keep=['HC', 'AD']
-)
-rsn_df_har = rsn_df_har.rename(columns={'id': 'subject_id'})
-print(f"\nHarmonized RSN data shape: {rsn_df_har.shape}")
-print(rsn_df_har.head())
-
-# For original data, we need to parse the parcel arrays
-# Reload original data and extract parcel values
-print("\nProcessing original data for RSN analysis...")
-df_orig_full = pd.read_csv(os.path.join(save_path, 'FDT_data.csv'))
-
-# Parse the parcel arrays from string representation
+# Parse original parcel data
 def parse_parcel_array(s):
     """Parse numpy array string representation"""
     if pd.isna(s):
         return np.array([])
-    # Clean the string and convert to array
     s = str(s).replace('[', '').replace(']', '').replace('\n', ' ')
     values = [float(x) for x in s.split() if x]
     return np.array(values)
 
-# Create a dataframe with parsed parcel values for original data
-orig_parcel_data = []
-for idx, row in df_orig_full.iterrows():
+# Create dataframes with parsed parcel values for original data
+print("\nProcessing original data for RSN analysis...")
+
+# Model-based original parcels
+orig_mb_parcel_data = []
+for idx, row in df_orig.iterrows():
     parcel_values = parse_parcel_array(row['I_norm2_parcels_modelbased'])
     if len(parcel_values) == 400:
-        orig_parcel_data.append({
+        orig_mb_parcel_data.append({
             'subject_id': row['subject_id'],
             'group': row['group'],
             **{str(i): parcel_values[i] for i in range(400)}
         })
 
-df_orig_parcels = pd.DataFrame(orig_parcel_data)
-print(f"Parsed original parcel data: {df_orig_parcels.shape}")
+df_orig_mb_parcels = pd.DataFrame(orig_mb_parcel_data)
+print(f"Model-based original parcel data: {df_orig_mb_parcels.shape}")
 
-# Aggregate RSN data for original dataset
-rsn_df_orig = aggregate_rsn_data(
-    df_orig_parcels, parcel_cols, parcel_rsn_map, RSNs, groups_to_keep=['HC', 'AD']
+# Model-free original parcels
+orig_mf_parcel_data = []
+for idx, row in df_orig.iterrows():
+    parcel_values = parse_parcel_array(row['I_norm2_parcels_modelfree'])
+    if len(parcel_values) == 400:
+        orig_mf_parcel_data.append({
+            'subject_id': row['subject_id'],
+            'group': row['group'],
+            **{str(i): parcel_values[i] for i in range(400)}
+        })
+
+df_orig_mf_parcels = pd.DataFrame(orig_mf_parcel_data)
+print(f"Model-free original parcel data: {df_orig_mf_parcels.shape}")
+
+# Aggregate RSN data for all 4 conditions
+rsn_groups = ['HC', 'AD']
+
+rsn_df_mb_orig = aggregate_rsn_data(
+    df_orig_mb_parcels, parcel_cols, parcel_rsn_map, RSNs, groups_to_keep=rsn_groups
 )
-print(f"Original RSN data shape: {rsn_df_orig.shape}")
+print(f"Model-based original RSN data: {rsn_df_mb_orig.shape}")
+
+rsn_df_mb_har = aggregate_rsn_data(
+    df_mb_har, parcel_cols, parcel_rsn_map, RSNs, groups_to_keep=rsn_groups
+)
+rsn_df_mb_har = rsn_df_mb_har.rename(columns={'id': 'subject_id'})
+print(f"Model-based harmonized RSN data: {rsn_df_mb_har.shape}")
+
+rsn_df_mf_orig = aggregate_rsn_data(
+    df_orig_mf_parcels, parcel_cols, parcel_rsn_map, RSNs, groups_to_keep=rsn_groups
+)
+print(f"Model-free original RSN data: {rsn_df_mf_orig.shape}")
+
+rsn_df_mf_har = aggregate_rsn_data(
+    df_mf_har, parcel_cols, parcel_rsn_map, RSNs, groups_to_keep=rsn_groups
+)
+rsn_df_mf_har = rsn_df_mf_har.rename(columns={'id': 'subject_id'})
+print(f"Model-free harmonized RSN data: {rsn_df_mf_har.shape}")
 
 # -------------------------
 # RSN Plots
@@ -770,25 +651,35 @@ print("\n" + "="*60)
 print("GENERATING RSN PLOTS")
 print("="*60)
 
-# Plot 1: Original RSN violin
+# Individual RSN plots
 plot_rsn_split_violin(
-    rsn_df_orig, parcel_rsn_map, RSNs, ['HC', 'AD'],
-    title='Original Model-Based: RSN Comparison (HC vs AD)',
-    filename='rsn_violin_original_modelbased.png',
-    test_type='ranksum'
+    rsn_df_mb_orig, parcel_rsn_map, RSNs, ['HC', 'AD'],
+    title='Model-based Original: RSN Comparison (HC vs AD)',
+    filename='rsn_violin_modelbased_original.png'
 )
 
-# Plot 2: Harmonized RSN violin
 plot_rsn_split_violin(
-    rsn_df_har, parcel_rsn_map, RSNs, ['HC', 'AD'],
-    title='Harmonized Model-Based: RSN Comparison (HC vs AD)',
-    filename='rsn_violin_harmonized_modelbased.png',
-    test_type='ranksum'
+    rsn_df_mb_har, parcel_rsn_map, RSNs, ['HC', 'AD'],
+    title='Model-based Harmonized: RSN Comparison (HC vs AD)',
+    filename='rsn_violin_modelbased_harmonized.png'
 )
 
-# Plot 3: Side-by-side RSN comparison
-plot_rsn_comparison_side_by_side(
-    rsn_df_orig, rsn_df_har, parcel_rsn_map, RSNs, ['HC', 'AD']
+plot_rsn_split_violin(
+    rsn_df_mf_orig, parcel_rsn_map, RSNs, ['HC', 'AD'],
+    title='Model-free Original: RSN Comparison (HC vs AD)',
+    filename='rsn_violin_modelfree_original.png'
+)
+
+plot_rsn_split_violin(
+    rsn_df_mf_har, parcel_rsn_map, RSNs, ['HC', 'AD'],
+    title='Model-free Harmonized: RSN Comparison (HC vs AD)',
+    filename='rsn_violin_modelfree_harmonized.png'
+)
+
+# Combined 2x2 RSN plot
+plot_rsn_four_conditions(
+    [rsn_df_mb_orig, rsn_df_mb_har, rsn_df_mf_orig, rsn_df_mf_har],
+    parcel_rsn_map, RSNs, ['HC', 'AD']
 )
 
 print("\nDone!")
